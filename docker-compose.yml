@@ -1,0 +1,122 @@
+version: "3.8"
+
+services:
+  # -------------------------------------------------------------------------
+  # EDAPHNET API Gateway
+  # -------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: edaphnet-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=production
+      - BACKEND_HOST=0.0.0.0
+      - BACKEND_PORT=8000
+      - WORKERS=2
+      - DATABASE_URL=postgresql://edaphnet_user:edaphnet_pass@postgres:5432/edaphnet_db
+      - REDIS_URL=redis://redis:6379/0
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME:-stg42sga}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY:-648173328782197}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET:-OAZNGsjBpZkB8LZa-gLe6Ejggug}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - edaphnet-net
+
+  # -------------------------------------------------------------------------
+  # Asynchronous Task Worker
+  # -------------------------------------------------------------------------
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: edaphnet-worker
+    restart: unless-stopped
+    command: ["python", "-m", "apps.worker.worker"]
+    environment:
+      - APP_ENV=production
+      - DATABASE_URL=postgresql://edaphnet_user:edaphnet_pass@postgres:5432/edaphnet_db
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - edaphnet-net
+
+  # -------------------------------------------------------------------------
+  # Streamlit Web & Mobile UI
+  # -------------------------------------------------------------------------
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: edaphnet-web
+    restart: unless-stopped
+    command: ["streamlit", "run", "apps/web/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    ports:
+      - "8501:8501"
+    environment:
+      - BACKEND_API_URL=http://api:8000
+    depends_on:
+      - api
+    networks:
+      - edaphnet-net
+
+  # -------------------------------------------------------------------------
+  # Redis Queue
+  # -------------------------------------------------------------------------
+  redis:
+    image: redis:7.2-alpine
+    container_name: edaphnet-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - edaphnet-net
+
+  # -------------------------------------------------------------------------
+  # PostgreSQL Persistence Store
+  # -------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: edaphnet-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: edaphnet_user
+      POSTGRES_PASSWORD: edaphnet_pass
+      POSTGRES_DB: edaphnet_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U edaphnet_user -d edaphnet_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - edaphnet-net
+
+volumes:
+  pgdata:
+
+networks:
+  edaphnet-net:
+    driver: bridge
