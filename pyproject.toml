@@ -18,6 +18,7 @@ dependencies = [
     "pydantic-settings>=2.2.0",
     "torch>=2.2.0",
     "torchvision>=0.17.0",
+    "onnx>=1.16.0",
     "numpy>=1.26.0",
     "pandas>=2.2.0",
     "scikit-learn>=1.4.0",

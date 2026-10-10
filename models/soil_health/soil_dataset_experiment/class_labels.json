@@ -1,0 +1,11 @@
+{
+  "classes": [
+    "Alluvial Soil",
+    "Black Soil",
+    "Clay Soil",
+    "Red Soil"
+  ],
+  "num_classes": 4,
+  "backbone": "efficientnet_b0",
+  "dataset": "D:\\RunTIme-Error\\Kisan-Seva\\data\\soil\\Soil dataset"
+}
