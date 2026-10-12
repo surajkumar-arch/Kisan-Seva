@@ -25,6 +25,7 @@ from frontend.utils.charts import (
     create_disease_probabilities_chart,
 )
 from frontend.utils.presets import FARM_PRESETS, generate_synthetic_field_image
+from frontend.utils.styles import inject_global_css
 
 def render_plant_disease_result_card(p_res: dict):
     """Render comprehensive diagnostic report for leaf foliage disease."""
@@ -73,7 +74,7 @@ def render_plant_disease_result_card(p_res: dict):
     st.markdown("---")
     st.markdown(f"**🔍 Observed Visual Pathology Symptoms:** *{symptoms}*")
 
-    st.markdown("#### 🔬 Neural Probability Distribution Across 7 Foliage Classes")
+    st.markdown("#### 🔬 Neural Probability Distribution Across Foliage Classes")
     if probs:
         p_fig = create_disease_probabilities_chart(probs)
         st.plotly_chart(p_fig, use_container_width=True)
@@ -93,11 +94,181 @@ def render_plant_disease_result_card(p_res: dict):
         for idx, item in enumerate(preventive, 1):
             st.markdown(f"**{idx}.** {item}")
 
+    render_xai_agents_panel(
+        key=str(p_res.get("request_id")),
+        condition=cond,
+        confidence=p_res.get("confidence", 0.0),
+        soil_type=(st.session_state.get("current_analysis") or {}).get("phase2_soil", {}).get("soil_type"),
+    )
+
+
     st.markdown("</div>", unsafe_allow_html=True)
 
 
 # Backend Configuration
 BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
+
+
+def render_xai_agents_panel(key: str, condition=None, confidence=None, soil_type=None):
+    """Grad-CAM (plant + soil) and the multi-agent advisor, fed with every available input."""
+    import base64
+
+    ctx = st.session_state.get("farm_ctx", {})
+    st.markdown("#### 🧠 Explainable AI & Agronomy Agents")
+    st.caption(
+        "Agents use: " + ", ".join(
+            f"{k}={v}" for k, v in {
+                "soil": soil_type, "diagnosis": condition, "pH": ctx.get("ph"),
+                "N": ctx.get("nitrogen"), "P": ctx.get("phosphorus"), "K": ctx.get("potassium"),
+                "temp": ctx.get("temperature_c"), "humidity": ctx.get("humidity"),
+                "rain": ctx.get("rainfall_mm"),
+            }.items() if v is not None
+        )
+    )
+
+    x_col, a_col = st.columns(2)
+    with x_col:
+        for kind, state_key, label in (
+            ("plant", "last_plant_bytes", "leaf"), ("soil", "last_soil_bytes", "soil")
+        ):
+            img_bytes = st.session_state.get(state_key)
+            if not img_bytes:
+                continue
+            if st.button(f"🔥 Grad-CAM: why this {label} result?", key=f"gradcam_{kind}_{key}"):
+                try:
+                    xr = requests.post(f"{BACKEND_URL}/api/explain/{kind}",
+                                       files={"image": (f"{kind}.jpg", img_bytes, "image/jpeg")}, timeout=30)
+                    if xr.status_code == 200:
+                        xj = xr.json()
+                        st.image(base64.b64decode(xj["heatmap_overlay_png_b64"]),
+                                 caption=f"{kind.title()}: red/yellow = regions that drove the prediction",
+                                 use_container_width=True)
+                        st.caption(xj["interpretation"])
+                        for t in xj["top_k"]:
+                            st.write(f"- {t['label']}: {t['probability'] * 100:.1f}%")
+                    else:
+                        st.error(f"Explain failed ({xr.status_code}): {xr.text}")
+                except Exception as ex:
+                    st.error(f"Explain error: {ex}")
+
+            # YOLOv8 Object & Lesion Spot Detection
+            if kind == "plant" and st.button(f"🎯 YOLOv8: Spot & Lesion Detector", key=f"yolo_{key}"):
+                try:
+                    yr = requests.post(f"{BACKEND_URL}/api/vision/yolo-detect",
+                                       files={"image": ("plant.jpg", img_bytes, "image/jpeg")}, timeout=30)
+                    if yr.status_code == 200:
+                        yj = yr.json()
+                        if yj.get("annotated_image_b64"):
+                            st.image(base64.b64decode(yj["annotated_image_b64"]),
+                                     caption=f"YOLOv8 Edge Localization ({yj.get('total_objects', 0)} regions detected)",
+                                     use_container_width=True)
+                            st.caption(yj.get("summary", ""))
+                        else:
+                            st.info(yj.get("message", "No discrete lesions localized."))
+                    else:
+                        st.error(f"YOLO error ({yr.status_code}): {yr.text}")
+                except Exception as ex:
+                    st.error(f"YOLO detection error: {ex}")
+
+    with a_col:
+        if st.button("🤖 Run Agronomy Agents", key=f"agents_{key}"):
+            payload = {k: v for k, v in {
+                "soil_type": soil_type, "condition": condition, "confidence": confidence, **ctx,
+            }.items() if v is not None}
+            try:
+                ar = requests.post(f"{BACKEND_URL}/api/agents/advise", json=payload, timeout=10)
+                if ar.status_code == 200:
+                    aj = ar.json()
+                    st.metric("Overall Risk", f"{aj['overall_risk_level']} ({aj['overall_risk_score']})")
+                    for a in aj["action_plan"]:
+                        st.markdown(f"**P{a['priority']} · {a['when']}** — {a['action']}")
+                    with st.expander("Agent reasoning trace"):
+                        st.json(aj["agents"])
+                else:
+                    st.error(f"Agents failed ({ar.status_code}): {ar.text}")
+            except Exception as ex:
+                st.error(f"Agent error: {ex}")
+
+    # Section: High-Resolution Printable PDF Prescription Download
+    st.markdown("<br>", unsafe_allow_html=True)
+    pdf_col1, pdf_col2 = st.columns([1, 1])
+    with pdf_col1:
+        if st.button("📄 Generate & Download Official Agronomic PDF Prescription", key=f"pdf_btn_{key}", use_container_width=True):
+            try:
+                pdf_payload = {
+                    "request_id": key or "REQ-FARM",
+                    "diagnosis_condition": condition or "Leaf Foliage Assessment",
+                    "confidence": float(confidence or 0.85),
+                    "pathogen": "Identified by Deep Vision CNN",
+                    "severity": "Moderate" if (confidence or 0) < 0.75 else "Significant",
+                    "health_score": int(75 - int((confidence or 0.5) * 40)),
+                    "organic_rx": ["Apply cold-pressed Neem Oil 5% at early morning hours", "Ensure proper drainage & airflow"],
+                    "chemical_rx": ["Apply protective copper hydroxide if sporulation continues"],
+                    "soil_type": soil_type or "Evaluated Farm Soil"
+                }
+                pdf_res = requests.post(f"{BACKEND_URL}/api/prescription/pdf", json=pdf_payload, timeout=15)
+                if pdf_res.status_code == 200:
+                    st.download_button(
+                        label="⬇️ Click Here to Download PDF Health Card",
+                        data=pdf_res.content,
+                        file_name=f"KisanSeva_Prescription_{key}.pdf",
+                        mime="application/pdf",
+                        key=f"dl_pdf_{key}",
+                        use_container_width=True
+                    )
+                    st.success("✅ Prescription generated successfully!")
+                else:
+                    st.error(f"PDF creation failed ({pdf_res.status_code}): {pdf_res.text}")
+            except Exception as ex:
+                st.error(f"PDF request error: {ex}")
+
+    with pdf_col2:
+        # Live Hyperlocal Microclimate Weather Telemetry
+        with st.popover("🌤️ Check Field Microclimate Weather & Outbreak Risk", use_container_width=True):
+            st.markdown("#### 🌦️ Live Telemetry & Spore Propagation Risk")
+            lat = float(ctx.get("latitude") or 20.59)
+            lon = float(ctx.get("longitude") or 78.96)
+            try:
+                wr = requests.get(f"{BACKEND_URL}/api/weather/telemetry?lat={lat}&lon={lon}", timeout=5)
+                if wr.status_code == 200:
+                    wj = wr.json()
+                    st.write(f"**Data Provider:** {wj.get('source')}")
+                    st.write(f"**Location:** {wj.get('city')}")
+                    wc1, wc2 = st.columns(2)
+                    wc1.metric("Temperature", f"{wj.get('temperature_c')} °C")
+                    wc2.metric("Relative Humidity", f"{wj.get('humidity')} %")
+                    st.info(f"**Disease Risk:** {wj.get('disease_outbreak_risk')}")
+                    st.caption(f"**Spray Window:** {wj.get('spray_window')}")
+            except Exception as ex:
+                st.error(f"Could not fetch weather: {ex}")
+
+    # Section: Conversational Multilingual AI Agronomist Chat
+    st.markdown("---")
+    with st.expander("💬 Ask KisanSeva AI Agronomist (Multilingual Voice / Text)", expanded=False):
+        st.caption("Ask questions about this diagnosis, fertilization schedules, or pest protection in Hindi, English, Telugu, etc.")
+        chat_lang = st.selectbox("Select Preferred Language:", ["English", "Hindi", "Telugu", "Tamil", "Marathi", "Bengali", "Gujarati"], key=f"chat_lang_{key}")
+        user_query = st.text_input("Enter your question:", placeholder="e.g. How much neem oil should I spray per acre? (नीम का तेल कितना छिड़कें?)", key=f"chat_in_{key}")
+        if st.button("Send to AI Agronomist", key=f"chat_btn_{key}") and user_query:
+            with st.spinner("Consulting KisanSeva AI Agronomist..."):
+                try:
+                    c_res = requests.post(
+                        f"{BACKEND_URL}/api/ai/chat",
+                        json={
+                            "query": user_query,
+                            "language": chat_lang,
+                            "context": {"condition": condition, "confidence": confidence, "soil": soil_type, **ctx}
+                        },
+                        timeout=25
+                    )
+                    if c_res.status_code == 200:
+                        cj = c_res.json()
+                        st.markdown(cj.get("reply", ""))
+                        if not cj.get("has_api_key"):
+                            st.info("💡 Note: Operating on KisanSeva Offline Expert Knowledge Base. Add your `GEMINI_API_KEY` in `.env` to unlock live Gemini 1.5 Pro AI.")
+                    else:
+                        st.error(f"Chat failed: {c_res.text}")
+                except Exception as ex:
+                    st.error(f"Chat request error: {ex}")
 
 # Page Configuration
 st.set_page_config(
@@ -108,96 +279,7 @@ st.set_page_config(
 )
 
 # Custom Design System & CSS Tokens
-st.markdown(
-    """
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-    
-    html, body, [class*="css"] {
-        font-family: 'Inter', sans-serif;
-    }
-    
-    .hero-container {
-        background: linear-gradient(135deg, #064e3b 0%, #047857 50%, #059669 100%);
-        border-radius: 16px;
-        padding: 28px 32px;
-        color: white;
-        margin-bottom: 24px;
-        box-shadow: 0 10px 25px -5px rgba(6, 78, 59, 0.2);
-    }
-    .hero-title {
-        font-size: 2.2rem;
-        font-weight: 800;
-        letter-spacing: -0.02em;
-        margin: 0;
-        color: #ffffff;
-    }
-    .hero-subtitle {
-        font-size: 1.05rem;
-        color: #a7f3d0;
-        margin-top: 6px;
-        font-weight: 500;
-    }
-    .phase-pill {
-        display: inline-block;
-        background: rgba(255, 255, 255, 0.18);
-        border: 1px solid rgba(255, 255, 255, 0.3);
-        color: #ffffff;
-        font-size: 0.8rem;
-        font-weight: 600;
-        padding: 4px 12px;
-        border-radius: 9999px;
-        margin-top: 12px;
-    }
-    .rx-card {
-        background: #ffffff;
-        border: 2px solid #059669;
-        border-radius: 12px;
-        padding: 24px;
-        margin-top: 16px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-    }
-    .rx-header {
-        border-bottom: 2px dashed #059669;
-        padding-bottom: 12px;
-        margin-bottom: 16px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    .crop-pill {
-        background: #ecfdf5;
-        color: #065f46;
-        border: 1px solid #a7f3d0;
-        padding: 12px 16px;
-        border-radius: 10px;
-        margin-bottom: 10px;
-    }
-    .alert-critical {
-        background: #fef2f2;
-        border-left: 5px solid #ef4444;
-        padding: 14px;
-        border-radius: 6px;
-        margin-bottom: 10px;
-    }
-    .alert-warning {
-        background: #fffbeb;
-        border-left: 5px solid #f59e0b;
-        padding: 14px;
-        border-radius: 6px;
-        margin-bottom: 10px;
-    }
-    .alert-info {
-        background: #f0fdf4;
-        border-left: 5px solid #10b981;
-        padding: 14px;
-        border-radius: 6px;
-        margin-bottom: 10px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+inject_global_css()
 
 # Sidebar Navigation & Backend Probe
 with st.sidebar:
@@ -217,34 +299,44 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("### 🧭 Navigation & Studio Views")
+    MODULE_OPTIONS = [
+        "🌿 Plant Foliage Disease Doctor",
+        "🌾 Precision Crop Recommendation Advisor",
+        "🚀 1-Click Multi-Modal Farm Studio",
+        "🩺 Agronomic Rx & Treatment Pad",
+        "📊 Multi-Modal Visual Analytics",
+        "📜 Scan History & Export Center",
+    ]
+    if "nav_view" not in st.session_state:
+        st.session_state.nav_view = MODULE_OPTIONS[0]
+
     active_view = st.radio(
         "Select Dashboard Module:",
-        [
-            "🌿 Plant Foliage Disease Doctor",
-            "🌾 Precision Crop Recommendation Advisor",
-            "🚀 1-Click Multi-Modal Farm Studio",
-            "🩺 Agronomic Rx & Treatment Pad",
-            "📊 Multi-Modal Visual Analytics",
-            "📜 Scan History & Export Center",
-        ],
-        index=0,
+        MODULE_OPTIONS,
+        index=MODULE_OPTIONS.index(st.session_state.nav_view) if st.session_state.nav_view in MODULE_OPTIONS else 0,
+        key="sidebar_nav_radio",
     )
+    st.session_state.nav_view = active_view
 
-    st.markdown("---")
-    st.markdown("### 🏗️ Architecture Status")
-    st.markdown(
-        """
-        - **Phase 1: Acquisition** ✅
-        - **Phase 2: Soil Health** ✅
-        - **Phase 3: Foliage Disease** ✅
-        - **Phase 4: Multi-Modal Fusion** ✅
-        - **Phase 5: Crop Recommendation** ✅
-        - **Phase 6: Unified Pipeline API** ✅
-        - **Phase 7: Frontend & Dashboard** ✅
-        - **Phase 8: Testing & Deployment** 🟢 *(Production v8.0.0)*
-        """
-    )
-    st.caption("KisanSeva Agricultural Decision Platform v8.0.0")
+# Top Responsive Navigation Banner for both PC & Mobile
+st.markdown(
+    f"""
+    <div class="top-navbar-banner">
+        <div class="top-navbar-brand">
+            <span>🌱</span> KisanSeva Hub
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <div class="top-navbar-pill">
+                📍 {active_view.split(' ', 1)[-1]}
+            </div>
+            <div class="top-navbar-pill" style="background: {'rgba(16,185,129,0.15)' if backend_online else 'rgba(239,68,68,0.15)'}; color: {'#047857' if backend_online else '#b91c1c'};">
+                ● {'Online' if backend_online else 'Offline'}
+            </div>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 # Hero Banner
 st.markdown(
@@ -334,6 +426,7 @@ if active_view == "🚀 1-Click Multi-Modal Farm Studio":
                 with st.spinner("🔬 Diagnosing plant foliage disease with MobileNetV3-Large..."):
                     try:
                         files = {"plant_image": (plant_fname or "plant.jpg", plant_bytes, "image/jpeg")}
+                        st.session_state.last_plant_bytes = plant_bytes
                         resp = requests.post(f"{BACKEND_URL}/api/plant/predict", files=files, timeout=20)
                         if resp.status_code == 200:
                             st.session_state.plant_only_result = resp.json()
@@ -370,6 +463,12 @@ if active_view == "🚀 1-Click Multi-Modal Farm Studio":
         st.markdown("<br>", unsafe_allow_html=True)
         force_refresh = st.checkbox("Bypass Cache (Force ML Re-run)", value=False)
 
+    # Share the live readings with the XAI / agent panel
+    st.session_state.farm_ctx = {
+        "ph": val_ph, "nitrogen": val_n, "phosphorus": val_p, "potassium": val_k,
+        "temperature_c": val_temp, "humidity": val_hum, "rainfall_mm": val_rain,
+    }
+
     st.markdown("<br>", unsafe_allow_html=True)
     col_act1, col_act2 = st.columns([1, 1])
     with col_act1:
@@ -384,6 +483,7 @@ if active_view == "🚀 1-Click Multi-Modal Farm Studio":
             with st.spinner("🔬 Diagnosing plant disease with MobileNetV3-Large..."):
                 try:
                     files = {"plant_image": (plant_fname or "plant.jpg", plant_bytes, "image/jpeg")}
+                    st.session_state.last_plant_bytes = plant_bytes
                     resp = requests.post(f"{BACKEND_URL}/api/plant/predict", files=files, timeout=20)
                     if resp.status_code == 200:
                         st.session_state.plant_only_result = resp.json()
@@ -399,6 +499,7 @@ if active_view == "🚀 1-Click Multi-Modal Farm Studio":
             with st.spinner("🔬 Diagnosing plant foliage disease with MobileNetV3-Large..."):
                 try:
                     files = {"plant_image": (plant_fname or "plant.jpg", plant_bytes, "image/jpeg")}
+                    st.session_state.last_plant_bytes = plant_bytes
                     resp = requests.post(f"{BACKEND_URL}/api/plant/predict", files=files, timeout=20)
                     if resp.status_code == 200:
                         st.session_state.plant_only_result = resp.json()
@@ -414,6 +515,8 @@ if active_view == "🚀 1-Click Multi-Modal Farm Studio":
         else:
             with st.spinner("⚡ Running Gated Neural Multi-Modal Pipeline..."):
                 try:
+                    st.session_state.last_plant_bytes = plant_bytes
+                    st.session_state.last_soil_bytes = soil_bytes
                     files = {
                         "soil_image": (soil_fname or "soil.jpg", soil_bytes, "image/jpeg"),
                         "plant_image": (plant_fname or "plant.jpg", plant_bytes, "image/jpeg"),
@@ -515,6 +618,13 @@ if active_view == "🚀 1-Click Multi-Modal Farm Studio":
                     unsafe_allow_html=True
                 )
 
+        render_xai_agents_panel(
+            key=a["request_id"],
+            condition=p3["condition"],
+            confidence=p3.get("confidence"),
+            soil_type=p2["soil_type"],
+        )
+
 
 # =========================================================================
 # MODULE: STANDALONE PLANT FOLIAGE DISEASE DIAGNOSTIC LAB
@@ -570,6 +680,37 @@ elif active_view == "🌿 Plant Foliage Disease Doctor":
                 lab_plant_bytes = lab_uploader.getvalue()
                 lab_plant_fname = lab_uploader.name
                 st.image(lab_uploader, caption="Uploaded Leaf Photograph", use_container_width=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        with st.expander("🌾 Optional: Add Field Soil & Weather Context for Agronomy Agents", expanded=False):
+            st.caption("Provide real farm readings to allow the multi-agent system to recommend precise soil corrections and weather-specific sprays.")
+            doc_ctx = st.session_state.get("farm_ctx", {})
+            d_c1, d_c2 = st.columns(2)
+            with d_c1:
+                doc_soil = st.selectbox(
+                    "Observed Soil Type",
+                    ["Not Specified", "Alluvial Soil", "Black Soil", "Clay Soil", "Red Soil", "Sandy Soil", "Loamy Soil"],
+                    index=0
+                )
+                doc_ph = st.number_input("Soil pH (0-14)", min_value=0.0, max_value=14.0, value=float(doc_ctx.get("ph") or 6.5), step=0.1, key="doc_ph")
+                doc_temp = st.number_input("Ambient Temp (°C)", min_value=-10.0, max_value=60.0, value=float(doc_ctx.get("temperature_c") or 26.0), step=0.5, key="doc_temp")
+                doc_hum = st.number_input("Humidity (%)", min_value=0.0, max_value=100.0, value=float(doc_ctx.get("humidity") or 70.0), step=1.0, key="doc_hum")
+            with d_c2:
+                doc_n = st.number_input("Nitrogen - N (kg/ha)", min_value=0.0, value=float(doc_ctx.get("nitrogen") or 140.0), step=5.0, key="doc_n")
+                doc_p = st.number_input("Phosphorus - P (kg/ha)", min_value=0.0, value=float(doc_ctx.get("phosphorus") or 35.0), step=2.0, key="doc_p")
+                doc_k = st.number_input("Potassium - K (kg/ha)", min_value=0.0, value=float(doc_ctx.get("potassium") or 150.0), step=5.0, key="doc_k")
+                doc_rain = st.number_input("Rainfall (mm)", min_value=0.0, value=float(doc_ctx.get("rainfall_mm") or 120.0), step=5.0, key="doc_rain")
+
+            # Update farm_ctx so render_xai_agents_panel picks it up immediately
+            st.session_state.farm_ctx = {
+                "ph": doc_ph, "nitrogen": doc_n, "phosphorus": doc_p, "potassium": doc_k,
+                "temperature_c": doc_temp, "humidity": doc_hum, "rainfall_mm": doc_rain,
+            }
+            if doc_soil != "Not Specified":
+                if "current_analysis" not in st.session_state or not st.session_state.current_analysis:
+                    st.session_state.current_analysis = {}
+                if "phase2_soil" not in st.session_state.current_analysis:
+                    st.session_state.current_analysis["phase2_soil"] = {}
+                st.session_state.current_analysis["phase2_soil"]["soil_type"] = doc_soil
 
         st.markdown("<br>", unsafe_allow_html=True)
         run_lab_btn = st.button("🔬 Diagnose Leaf Disease Now", type="primary", use_container_width=True)
@@ -596,6 +737,7 @@ elif active_view == "🌿 Plant Foliage Disease Doctor":
             with st.spinner("🔬 Running MobileNetV3-Large neural disease inference..."):
                 try:
                     files = {"plant_image": (lab_plant_fname, lab_plant_bytes, "image/jpeg")}
+                    st.session_state.last_plant_bytes = lab_plant_bytes
                     resp = requests.post(f"{BACKEND_URL}/api/plant/predict", files=files, timeout=20)
                     if resp.status_code == 200:
                         st.session_state.plant_only_result = resp.json()

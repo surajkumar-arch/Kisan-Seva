@@ -1,25 +1,21 @@
 {
   "expo": {
-    "name": "Smart Agriculture",
-    "slug": "smart-agriculture-mobile",
+    "name": "KisanSeva Mobile",
+    "slug": "kisanseva-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
       "resizeMode": "contain",
-      "backgroundColor": "#1e3a1e"
+      "backgroundColor": "#022c22"
     },
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#022c22"
       }
-    },
-    "web": {
-      "favicon": "./assets/favicon.png"
     }
   }
 }

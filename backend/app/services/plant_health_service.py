@@ -15,6 +15,9 @@ from backend.app.models.plant_net import (
     PLANT_DISEASE_CLASSES,
     PLANT_DISEASE_METADATA,
     get_plant_model,
+    get_plant_class_names,
+    get_disease_metadata,
+    is_plant_model_trained,
 )
 from backend.app.schemas.plant_schema import PlantPredictionResponse
 from backend.app.utils.image_utils import preprocess_image
@@ -56,16 +59,16 @@ def init_phase3_db(db_path: Optional[Path] = None) -> None:
 
 def calculate_plant_health_score(condition: str, confidence: float) -> Tuple[int, str]:
     """Calculate the Plant Foliage Health Score (0-100) and severity rating."""
-    if condition == "Healthy Foliage":
+    meta = get_disease_metadata(condition)
+    sev = meta["severity_level"]
+    if sev == "None":
         # Disease-free leaf maintains 90-100 health score
         score = int(85 + 15 * confidence)
         severity = "None"
-    elif condition in ["Early Blight", "Powdery Mildew", "Leaf Rust"]:
-        # Moderate pathogens
+    elif sev == "Moderate":
         score = max(35, int(65 - 25 * confidence))
         severity = "Moderate"
     else:
-        # Aggressive pathogens (Late Blight, Bacterial Spot, Yellow Leaf Curl)
         score = max(15, int(45 - 30 * confidence))
         severity = "Severe"
 
@@ -91,43 +94,45 @@ def predict_plant_health(
         logits = model(tensor)
         probs = F.softmax(logits, dim=1).squeeze(0).numpy()
 
-    # Domain visual heuristics for robust out-of-the-box plant leaf inspection
-    rgb = np.asarray(plant_image.convert("RGB").resize((64, 64)), dtype=np.float32)
-    r_mean = float(np.mean(rgb[:, :, 0]))
-    g_mean = float(np.mean(rgb[:, :, 1]))
-    b_mean = float(np.mean(rgb[:, :, 2]))
+    class_names = get_plant_class_names()
+    trained = is_plant_model_trained()
 
-    prior_bias = np.ones(len(PLANT_DISEASE_CLASSES), dtype=np.float32)
+    if trained:
+        # Trained weights: trust the network directly (no colour priors)
+        adjusted_probs = probs / np.sum(probs)
+    else:
+        # Domain visual heuristics for untrained fallback only
+        rgb = np.asarray(plant_image.convert("RGB").resize((64, 64)), dtype=np.float32)
+        r_mean = float(np.mean(rgb[:, :, 0]))
+        g_mean = float(np.mean(rgb[:, :, 1]))
+        b_mean = float(np.mean(rgb[:, :, 2]))
 
-    # High green dominance with low red/blue -> Healthy foliage
-    if g_mean > r_mean * 1.2 and g_mean > b_mean * 1.2:
-        prior_bias[PLANT_DISEASE_CLASSES.index("Healthy Foliage")] += 2.0
-    # Yellowish leaf chlorosis (High R and G, lower B) -> Yellow Leaf Curl or Rust
-    elif r_mean > 130 and g_mean > 130 and b_mean < 90:
-        prior_bias[PLANT_DISEASE_CLASSES.index("Yellow Leaf Curl")] += 1.8
-        prior_bias[PLANT_DISEASE_CLASSES.index("Leaf Rust")] += 1.4
-    # Pale powdery light tones (High across R, G, B with slight grayish cast) -> Powdery Mildew
-    elif r_mean > 160 and g_mean > 160 and b_mean > 160:
-        prior_bias[PLANT_DISEASE_CLASSES.index("Powdery Mildew")] += 2.2
-    # Dark necrotic spots with reddish/brownish tone -> Early or Late Blight
-    elif r_mean > g_mean and r_mean > b_mean:
-        prior_bias[PLANT_DISEASE_CLASSES.index("Early Blight")] += 1.6
-        prior_bias[PLANT_DISEASE_CLASSES.index("Late Blight")] += 1.5
-
-    adjusted_scores = probs * prior_bias
-    adjusted_probs = adjusted_scores / np.sum(adjusted_scores)
+        prior_bias = np.ones(len(class_names), dtype=np.float32)
+        if class_names == PLANT_DISEASE_CLASSES:
+            if g_mean > r_mean * 1.2 and g_mean > b_mean * 1.2:
+                prior_bias[class_names.index("Healthy Foliage")] += 2.0
+            elif r_mean > 130 and g_mean > 130 and b_mean < 90:
+                prior_bias[class_names.index("Yellow Leaf Curl")] += 1.8
+                prior_bias[class_names.index("Leaf Rust")] += 1.4
+            elif r_mean > 160 and g_mean > 160 and b_mean > 160:
+                prior_bias[class_names.index("Powdery Mildew")] += 2.2
+            elif r_mean > g_mean and r_mean > b_mean:
+                prior_bias[class_names.index("Early Blight")] += 1.6
+                prior_bias[class_names.index("Late Blight")] += 1.5
+        adjusted_scores = probs * prior_bias
+        adjusted_probs = adjusted_scores / np.sum(adjusted_scores)
 
     pred_idx = int(np.argmax(adjusted_probs))
-    pred_condition = PLANT_DISEASE_CLASSES[pred_idx]
+    pred_condition = class_names[pred_idx]
     pred_confidence = float(adjusted_probs[pred_idx])
 
     prob_dict = {
         cls_name: round(float(adjusted_probs[i]), 4)
-        for i, cls_name in enumerate(PLANT_DISEASE_CLASSES)
+        for i, cls_name in enumerate(class_names)
     }
 
-    meta = PLANT_DISEASE_METADATA.get(pred_condition, PLANT_DISEASE_METADATA["Healthy Foliage"])
-    is_healthy = pred_condition == "Healthy Foliage"
+    meta = get_disease_metadata(pred_condition)
+    is_healthy = "healthy" in pred_condition.lower()
     health_score, severity = calculate_plant_health_score(pred_condition, pred_confidence)
 
     # 4. Save to SQLite database
@@ -173,7 +178,11 @@ def predict_plant_health(
 
     return PlantPredictionResponse(
         status="success",
-        message="Plant health analysis completed successfully",
+        message=(
+            "Plant health analysis completed successfully"
+            if pred_confidence >= 0.60
+            else "Low-confidence diagnosis: the leaf may be from an unsupported crop or the photo is unclear. Retake a close, well-lit photo of a single leaf."
+        ),
         request_id=request_id,
         condition=pred_condition,
         is_healthy=is_healthy,

@@ -17,3 +17,4 @@ plotly>=5.20.0
 pymongo>=4.6.0
 dnspython>=2.6.0
 cloudinary>=1.38.0
+optuna>=3.6.0

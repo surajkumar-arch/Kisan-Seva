@@ -19,6 +19,7 @@ from backend.app.routes.crop import router as crop_router
 from backend.app.routes.pipeline import router as pipeline_router
 from backend.app.routes.evaluation import router as evaluation_router
 from backend.app.routes.environment import router as environment_router
+from backend.app.routes.insights import router as insights_router
 from backend.app.services.validation import init_db
 from backend.app.services.soil_health_service import init_phase2_db
 from backend.app.services.plant_health_service import init_phase3_db
@@ -97,6 +98,7 @@ app.include_router(crop_router)
 app.include_router(pipeline_router)
 app.include_router(evaluation_router)
 app.include_router(environment_router)
+app.include_router(insights_router)
 
 
 @app.get("/")

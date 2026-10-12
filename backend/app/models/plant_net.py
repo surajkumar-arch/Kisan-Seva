@@ -151,7 +151,8 @@ PLANT_DISEASE_METADATA: Dict[str, Dict[str, any]] = {
 }
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
-DEFAULT_WEIGHTS_PATH = BASE_DIR / "models" / "plant_health" / "plant_mobilenet_v3.pt"
+DEFAULT_WEIGHTS_PATH = BASE_DIR / "models" / "plant_health" / "multi_crop_30_class" / "plant_mobilenet_v3.pt"
+LEGACY_WEIGHTS_PATH = BASE_DIR / "models" / "plant_health" / "plant_mobilenet_v3.pt"
 
 
 class PlantMobileNetV3(nn.Module):
@@ -168,8 +169,11 @@ class PlantMobileNetV3(nn.Module):
             self.backbone = models.mobilenet_v3_large(weights=None)
 
         in_features = self.backbone.classifier[3].in_features
-        # Replace final classifier layer
-        self.backbone.classifier[3] = nn.Linear(in_features=in_features, out_features=num_classes)
+        # Replace final classifier layer (same head layout as train_plant_disease.py)
+        self.backbone.classifier[3] = nn.Sequential(
+            nn.Dropout(p=0.2),
+            nn.Linear(in_features, num_classes),
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass returning unnormalized logits."""
@@ -177,38 +181,88 @@ class PlantMobileNetV3(nn.Module):
 
 
 _PLANT_MODEL_INSTANCE: Optional[PlantMobileNetV3] = None
+_PLANT_CLASS_NAMES: List[str] = list(PLANT_DISEASE_CLASSES)
+_PLANT_MODEL_TRAINED: bool = False
+
+
+def get_plant_class_names() -> List[str]:
+    """Class names matching the loaded model's output layer."""
+    get_plant_model()
+    return _PLANT_CLASS_NAMES
+
+
+def is_plant_model_trained() -> bool:
+    """True when trained weights were successfully loaded."""
+    get_plant_model()
+    return _PLANT_MODEL_TRAINED
 
 
 def get_plant_model(weights_path: Optional[Path] = None) -> PlantMobileNetV3:
     """Retrieve singleton instance of the Plant Disease Classification model."""
-    global _PLANT_MODEL_INSTANCE
+    global _PLANT_MODEL_INSTANCE, _PLANT_CLASS_NAMES, _PLANT_MODEL_TRAINED
     if _PLANT_MODEL_INSTANCE is not None:
         return _PLANT_MODEL_INSTANCE
 
     target_weights = weights_path or DEFAULT_WEIGHTS_PATH
+    if not target_weights.exists() and LEGACY_WEIGHTS_PATH.exists():
+        target_weights = LEGACY_WEIGHTS_PATH
     labels_file = target_weights.parent / "class_labels.json"
     num_classes = len(PLANT_DISEASE_CLASSES)
+    class_names: List[str] = list(PLANT_DISEASE_CLASSES)
     if labels_file.exists():
         try:
             import json
             with open(labels_file, "r", encoding="utf-8") as f:
                 meta = json.load(f)
-                if "num_classes" in meta:
+                if "classes" in meta:
+                    class_names = [str(c) for c in meta["classes"]]
+                    num_classes = len(class_names)
+                elif "num_classes" in meta:
                     num_classes = meta["num_classes"]
-                elif "classes" in meta:
-                    num_classes = len(meta["classes"])
         except Exception:
             pass
 
-    model = PlantMobileNetV3(num_classes=num_classes, pretrained_backbone=True)
+    model = PlantMobileNetV3(num_classes=num_classes, pretrained_backbone=False)
     model.eval()
 
     if target_weights.exists():
         try:
             state_dict = torch.load(target_weights, map_location=torch.device("cpu"))
-            model.load_state_dict(state_dict)
+            try:
+                # Checkpoints from train_plant_disease.py store raw torchvision keys
+                model.backbone.load_state_dict(state_dict)
+            except Exception:
+                model.load_state_dict(state_dict)
+            _PLANT_MODEL_TRAINED = True
+            if len(class_names) == num_classes:
+                _PLANT_CLASS_NAMES = class_names
         except Exception:
-            pass
+            _PLANT_MODEL_TRAINED = False
+            _PLANT_CLASS_NAMES = list(PLANT_DISEASE_CLASSES) if num_classes == len(PLANT_DISEASE_CLASSES) else class_names
+    else:
+        _PLANT_CLASS_NAMES = class_names
 
     _PLANT_MODEL_INSTANCE = model
     return _PLANT_MODEL_INSTANCE
+
+
+def get_disease_metadata(class_name: str) -> Dict[str, any]:
+    """Resolve agronomic metadata for any class label (legacy or crop_disease style)."""
+    if class_name in PLANT_DISEASE_METADATA:
+        return PLANT_DISEASE_METADATA[class_name]
+    name = class_name.lower()
+    if "healthy" in name:
+        base = "Healthy Foliage"
+    elif any(k in name for k in ("mosaic", "virus", "leafcurl", "curl", "yellowish", "yb_", "moko", "whitefly")):
+        base = "Yellow Leaf Curl"
+    elif "rust" in name:
+        base = "Leaf Rust"
+    elif "mildew" in name:
+        base = "Powdery Mildew"
+    elif any(k in name for k in ("bacterial", "blackrot", "black_rot", "rot")):
+        base = "Bacterial Spot"
+    elif "late" in name:
+        base = "Late Blight"
+    else:
+        base = "Early Blight"
+    return PLANT_DISEASE_METADATA[base]

@@ -11,7 +11,7 @@ import torch
 
 from backend.app.models.fusion_net import get_fusion_model
 from backend.app.models.soil_net import SOIL_CLASSES
-from backend.app.models.plant_net import PLANT_DISEASE_CLASSES
+from backend.app.models.plant_net import PLANT_DISEASE_CLASSES, PLANT_DISEASE_METADATA, get_disease_metadata
 from backend.app.schemas.fusion_schema import (
     FusionResponse,
     DomainStressScores,
@@ -85,7 +85,14 @@ def extract_fusion_features(
         raw_p_probs = plant_prediction.get("probabilities", {})
         if isinstance(raw_p_probs, str):
             raw_p_probs = json.loads(raw_p_probs)
-        plant_probs = [float(raw_p_probs.get(cls, 0.0)) for cls in PLANT_DISEASE_CLASSES]
+        plant_probs = [0.0] * len(PLANT_DISEASE_CLASSES)
+        for cls, val in raw_p_probs.items():
+            if cls in PLANT_DISEASE_CLASSES:
+                bucket = cls
+            else:
+                meta = get_disease_metadata(cls)
+                bucket = next(k for k, v in PLANT_DISEASE_METADATA.items() if v is meta)
+            plant_probs[PLANT_DISEASE_CLASSES.index(bucket)] += float(val)
         p_health_score = float(plant_prediction.get("plant_health_score") or 80.0)
 
     norm_plant_health = p_health_score / 100.0

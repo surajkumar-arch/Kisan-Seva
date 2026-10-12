@@ -70,7 +70,8 @@ SOIL_METADATA: Dict[str, Dict[str, str]] = {
 }
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
-DEFAULT_WEIGHTS_PATH = BASE_DIR / "models" / "soil_health" / "soil_efficientnet_b0.pt"
+DEFAULT_WEIGHTS_PATH = BASE_DIR / "models" / "soil_health" / "soil_dataset_experiment" / "soil_efficientnet_b0.pt"
+LEGACY_WEIGHTS_PATH = BASE_DIR / "models" / "soil_health" / "soil_efficientnet_b0.pt"
 
 
 class SoilEfficientNet(nn.Module):
@@ -100,24 +101,62 @@ class SoilEfficientNet(nn.Module):
 
 
 _MODEL_INSTANCE: Optional[SoilEfficientNet] = None
+_SOIL_CLASS_NAMES: List[str] = list(SOIL_CLASSES)
+_SOIL_MODEL_TRAINED: bool = False
+
+
+def get_soil_class_names() -> List[str]:
+    """Class names matching the loaded model's output layer."""
+    get_soil_model()
+    return _SOIL_CLASS_NAMES
+
+
+def is_soil_model_trained() -> bool:
+    """True when trained weights were successfully loaded."""
+    get_soil_model()
+    return _SOIL_MODEL_TRAINED
 
 
 def get_soil_model(weights_path: Optional[Path] = None) -> SoilEfficientNet:
     """Retrieve or initialize singleton instance of the Soil Classification model."""
-    global _MODEL_INSTANCE
+    global _MODEL_INSTANCE, _SOIL_CLASS_NAMES, _SOIL_MODEL_TRAINED
     if _MODEL_INSTANCE is not None:
         return _MODEL_INSTANCE
 
     target_weights = weights_path or DEFAULT_WEIGHTS_PATH
-    model = SoilEfficientNet(num_classes=len(SOIL_CLASSES), pretrained_backbone=True)
+    if not target_weights.exists() and LEGACY_WEIGHTS_PATH.exists():
+        target_weights = LEGACY_WEIGHTS_PATH
+
+    class_names: List[str] = list(SOIL_CLASSES)
+    labels_file = target_weights.parent / "class_labels.json"
+    if labels_file.exists():
+        try:
+            import json
+            with open(labels_file, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+            if meta.get("classes"):
+                class_names = [str(c) for c in meta["classes"]]
+        except Exception:
+            pass
+
+    model = SoilEfficientNet(num_classes=len(class_names), pretrained_backbone=False)
     model.eval()
 
     if target_weights.exists():
         try:
             state_dict = torch.load(target_weights, map_location=torch.device("cpu"))
-            model.load_state_dict(state_dict)
+            try:
+                # Checkpoints from train_soil.py store raw torchvision keys
+                model.backbone.load_state_dict(state_dict)
+            except Exception:
+                model.load_state_dict(state_dict)
+            _SOIL_MODEL_TRAINED = True
+            _SOIL_CLASS_NAMES = class_names
         except Exception:
-            pass  # Fallback to backbone initialized model
+            _SOIL_MODEL_TRAINED = False
+            _SOIL_CLASS_NAMES = list(SOIL_CLASSES) if len(class_names) != len(SOIL_CLASSES) else class_names
+    else:
+        _SOIL_CLASS_NAMES = class_names
 
     _MODEL_INSTANCE = model
     return _MODEL_INSTANCE

@@ -15,7 +15,7 @@ from backend.app.schemas.soil_schema import (
     SoilPredictionResponse,
     SoilPhysicalProperties,
 )
-from backend.app.models.soil_net import SOIL_CLASSES, SOIL_METADATA
+from backend.app.models.soil_net import SOIL_CLASSES, SOIL_METADATA, get_soil_class_names
 from backend.app.utils.image_utils import (
     validate_image_file,
     ImageValidationError,
@@ -39,7 +39,7 @@ async def get_soil_classes():
     """Retrieve list of supported soil classes and their physical profiles."""
     return {
         "status": "success",
-        "classes": SOIL_CLASSES,
+        "classes": get_soil_class_names(),
         "metadata": SOIL_METADATA,
     }
 

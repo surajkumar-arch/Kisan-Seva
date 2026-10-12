@@ -24,7 +24,7 @@ const CROP_PRESETS = [
 
 export default function App() {
   const [backendUrl, setBackendUrl] = useState(
-    Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://localhost:8000'
+    'http://172.20.10.6:8010'
   );
   const [activeTab, setActiveTab] = useState('plant'); // 'plant', 'crop', 'audit', 'config'
   const [serverOnline, setServerOnline] = useState(null);

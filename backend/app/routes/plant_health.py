@@ -11,7 +11,7 @@ from PIL import Image
 
 from backend.app.schemas.input_schema import ValidationErrorDetail
 from backend.app.schemas.plant_schema import PlantPredictionResponse
-from backend.app.models.plant_net import PLANT_DISEASE_CLASSES, PLANT_DISEASE_METADATA
+from backend.app.models.plant_net import PLANT_DISEASE_CLASSES, PLANT_DISEASE_METADATA, get_plant_class_names
 from backend.app.utils.image_utils import validate_image_file, ImageValidationError
 from backend.app.services.validation import (
     get_analysis_record_by_request_id,
@@ -33,7 +33,7 @@ async def get_plant_disease_classes():
     """Retrieve list of supported plant foliage disease classes and treatment metadata."""
     return {
         "status": "success",
-        "classes": PLANT_DISEASE_CLASSES,
+        "classes": get_plant_class_names(),
         "metadata": PLANT_DISEASE_METADATA,
     }
 
