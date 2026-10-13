@@ -1,0 +1,86 @@
+{
+  "method": "soft_voting_probability_average",
+  "models": {
+    "neural_network": {
+      "artifact": "crop_model.pth",
+      "weight": 0.5
+    },
+    "random_forest": {
+      "artifact": "crop_random_forest.joblib",
+      "weight": 0.5
+    }
+  },
+  "feature_order": [
+    "N",
+    "P",
+    "K",
+    "temperature",
+    "humidity",
+    "ph",
+    "rainfall"
+  ],
+  "num_classes": 69,
+  "test_accuracy": 0.8589527027027027,
+  "datasets": [
+    {
+      "path": "D:\\RunTIme-Error\\Kisan-Seva\\data\\crop\\Crop_recommendation.csv",
+      "rows_used": 2200
+    },
+    {
+      "path": "D:\\RunTIme-Error\\Kisan-Seva\\data\\crop\\Crop_recommendation_with_estimated_rainfall.csv",
+      "rows_used": 57000
+    }
+  ],
+  "rainfall_provenance": {
+    "rainfall_status": "estimated, not measured",
+    "method": "ExtraTreesRegressor (300 trees, min_samples_leaf=2)",
+    "estimator_features": [
+      "N",
+      "P",
+      "K",
+      "temperature",
+      "humidity",
+      "ph"
+    ],
+    "crop_label_used_to_estimate_rainfall": false,
+    "reference_csv": "D:\\RunTIme-Error\\Kisan-Seva\\data\\crop\\Crop_recommendation.csv",
+    "reference_rows": 2200,
+    "held_out_reference_mae_mm": 16.581165734997555,
+    "held_out_reference_r2": 0.7655052760398953,
+    "target_rows": 57000,
+    "target_crop_classes": 57,
+    "target_features_outside_reference_ranges": {
+      "N": {
+        "reference_min": 0.0,
+        "reference_max": 140.0,
+        "target_rows_outside_range": 3277
+      },
+      "P": {
+        "reference_min": 5.0,
+        "reference_max": 145.0,
+        "target_rows_outside_range": 0
+      },
+      "K": {
+        "reference_min": 5.0,
+        "reference_max": 205.0,
+        "target_rows_outside_range": 0
+      },
+      "temperature": {
+        "reference_min": 8.825674745,
+        "reference_max": 43.67549305,
+        "target_rows_outside_range": 423
+      },
+      "humidity": {
+        "reference_min": 14.25803981,
+        "reference_max": 99.98187601,
+        "target_rows_outside_range": 56
+      },
+      "ph": {
+        "reference_min": 3.504752314,
+        "reference_max": 9.93509073,
+        "target_rows_outside_range": 0
+      }
+    },
+    "warning": "The reference data is a small crop-recommendation benchmark and may not represent Tamil Nadu conditions. Estimated rainfall is not observed weather; model accuracy trained on this derived column is not evidence of real-world accuracy."
+  }
+}

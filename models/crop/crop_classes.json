@@ -1,0 +1,168 @@
+{
+  "crops": [
+    "Annual Moringa",
+    "Apple",
+    "Ash Gourd",
+    "Banana",
+    "Beetroot",
+    "Bhendi",
+    "Bitter Gourd",
+    "Blackgram",
+    "Bottle Gourd",
+    "Brinjal",
+    "Cabbage",
+    "Capsicum",
+    "Carrot",
+    "Castor",
+    "Cauliflower",
+    "Chickpea",
+    "Chillies",
+    "Chowchow",
+    "Cluster Bean",
+    "Coconut",
+    "Coffee",
+    "Cotton",
+    "Cowpea",
+    "Cucumber",
+    "Elephant Foot Yam",
+    "French Bean",
+    "Gingely",
+    "Grapes",
+    "Groundnut",
+    "Horsegram",
+    "Jute",
+    "Kidney Beans",
+    "Kudiraivali",
+    "Lentil",
+    "Maize",
+    "Mango",
+    "Mothbeans",
+    "Mung Bean",
+    "Muskmelon",
+    "Onion",
+    "Orange",
+    "Panivaragu",
+    "Papaya",
+    "Pearl Millet",
+    "Peas",
+    "Pigeon Peas",
+    "Pomegranate",
+    "Pumpkin",
+    "Radish",
+    "Ragi",
+    "Ribbed Gourd",
+    "Rice",
+    "Samai",
+    "Small Onion",
+    "Snake Gourd",
+    "Sorghum",
+    "Soybean",
+    "Sugarbeet",
+    "Sugarcane",
+    "Sunflower",
+    "Sweet Potato",
+    "Tapoica",
+    "Thinai",
+    "Tinda",
+    "Tomato",
+    "Varagu",
+    "Vegetable Cowpea",
+    "Watermelon",
+    "Wheat"
+  ],
+  "num_classes": 69,
+  "scaler": {
+    "mean": [
+      80.09247589111328,
+      48.384796142578125,
+      56.23605728149414,
+      24.785396575927734,
+      71.14874267578125,
+      6.620421886444092,
+      119.76187896728516
+    ],
+    "std": [
+      34.37838363647461,
+      18.038949966430664,
+      28.663728713989258,
+      5.821503639221191,
+      23.12409019470215,
+      0.6579980254173279,
+      29.762229919433594
+    ],
+    "features": [
+      "N",
+      "P",
+      "K",
+      "temperature",
+      "humidity",
+      "ph",
+      "rainfall"
+    ]
+  },
+  "neural_accuracy": 0.8107263513513514,
+  "random_forest_accuracy": 0.8758445945945946,
+  "ensemble_accuracy": 0.8589527027027027,
+  "datasets": [
+    {
+      "path": "D:\\RunTIme-Error\\Kisan-Seva\\data\\crop\\Crop_recommendation.csv",
+      "rows_used": 2200
+    },
+    {
+      "path": "D:\\RunTIme-Error\\Kisan-Seva\\data\\crop\\Crop_recommendation_with_estimated_rainfall.csv",
+      "rows_used": 57000
+    }
+  ],
+  "rainfall_provenance": {
+    "rainfall_status": "estimated, not measured",
+    "method": "ExtraTreesRegressor (300 trees, min_samples_leaf=2)",
+    "estimator_features": [
+      "N",
+      "P",
+      "K",
+      "temperature",
+      "humidity",
+      "ph"
+    ],
+    "crop_label_used_to_estimate_rainfall": false,
+    "reference_csv": "D:\\RunTIme-Error\\Kisan-Seva\\data\\crop\\Crop_recommendation.csv",
+    "reference_rows": 2200,
+    "held_out_reference_mae_mm": 16.581165734997555,
+    "held_out_reference_r2": 0.7655052760398953,
+    "target_rows": 57000,
+    "target_crop_classes": 57,
+    "target_features_outside_reference_ranges": {
+      "N": {
+        "reference_min": 0.0,
+        "reference_max": 140.0,
+        "target_rows_outside_range": 3277
+      },
+      "P": {
+        "reference_min": 5.0,
+        "reference_max": 145.0,
+        "target_rows_outside_range": 0
+      },
+      "K": {
+        "reference_min": 5.0,
+        "reference_max": 205.0,
+        "target_rows_outside_range": 0
+      },
+      "temperature": {
+        "reference_min": 8.825674745,
+        "reference_max": 43.67549305,
+        "target_rows_outside_range": 423
+      },
+      "humidity": {
+        "reference_min": 14.25803981,
+        "reference_max": 99.98187601,
+        "target_rows_outside_range": 56
+      },
+      "ph": {
+        "reference_min": 3.504752314,
+        "reference_max": 9.93509073,
+        "target_rows_outside_range": 0
+      }
+    },
+    "warning": "The reference data is a small crop-recommendation benchmark and may not represent Tamil Nadu conditions. Estimated rainfall is not observed weather; model accuracy trained on this derived column is not evidence of real-world accuracy."
+  }
+}
