@@ -1,7 +1,6 @@
-```yaml
 name: EDAPHNET Enterprise CI/CD Pipeline
 
-on:
+"on":
   push:
     branches: [main, master]
   pull_request:
