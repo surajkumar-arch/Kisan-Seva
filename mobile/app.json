@@ -16,6 +16,9 @@
       "adaptiveIcon": {
         "backgroundColor": "#022c22"
       }
-    }
+    },
+    "plugins": [
+      "expo-sharing"
+    ]
   }
 }
