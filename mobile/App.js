@@ -179,6 +179,9 @@ export default function App() {
   const [cSoil, setCSoil] = useState('Loamy Soil');
   const [cropLoading, setCropLoading] = useState(false);
   const [cropResult, setCropResult] = useState(null);
+  const [cropDistrict, setCropDistrict] = useState('Ludhiana');
+  const [liveWeatherLoading, setLiveWeatherLoading] = useState(false);
+  const [liveWeatherTelemetry, setLiveWeatherTelemetry] = useState(null);
 
   // -------------------------------------------------------------
   // Tab 3: Unified Multi-Modal Audit State
@@ -1008,6 +1011,66 @@ export default function App() {
     }
   };
 
+  const handleFetchLiveWeather = async (targetDistrict) => {
+    const loc = targetDistrict || cropDistrict || 'Ludhiana';
+    setLiveWeatherLoading(true);
+    try {
+      const res = await fetch(`${backendUrl}/api/crop/live-weather-telemetry?location=${encodeURIComponent(loc)}`);
+      const data = await res.json();
+      if (res.ok) {
+        setLiveWeatherTelemetry(data);
+        if (data.temperature_c !== undefined) setCTemp(String(data.temperature_c));
+        if (data.relative_humidity_pct !== undefined) setCHum(String(data.relative_humidity_pct));
+        if (data.rainfall_forecast_7d_mm !== undefined) setCRain(String(data.rainfall_forecast_7d_mm));
+        Alert.alert(
+          'Live Weather Connected 🌤️',
+          `Station: ${data.station_name}, ${data.state}\n` +
+          `Temp: ${data.temperature_c}°C | Humidity: ${data.relative_humidity_pct}%\n` +
+          `7-Day Rain: ${data.rainfall_forecast_7d_mm} mm | Wind: ${data.wind_speed_kmh} km/h`
+        );
+      } else {
+        Alert.alert('Weather Notice', data.detail || 'Could not fetch live weather.');
+      }
+    } catch {
+      Alert.alert('Network Error', `Cannot reach API at ${backendUrl}`);
+    } finally {
+      setLiveWeatherLoading(false);
+    }
+  };
+
+  const handlePredictWithLiveWeather = async () => {
+    setCropLoading(true);
+    setCropResult(null);
+    try {
+      const payload = {
+        district: cropDistrict || 'Ludhiana',
+        ph: parseFloat(cPh) || 6.5,
+        nitrogen: parseFloat(cN) || 140.0,
+        phosphorus: parseFloat(cP) || 35.0,
+        potassium: parseFloat(cK) || 120.0,
+        soil_type: cSoil || 'Alluvial Soil',
+      };
+      const res = await fetch(`${backendUrl}/api/crop/predict-with-live-weather`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCropResult(data);
+        if (data.weather_telemetry) {
+          setLiveWeatherTelemetry(data.weather_telemetry);
+        }
+      } else {
+        Alert.alert('Prediction Error', data.detail || 'Could not complete live crop prediction.');
+      }
+    } catch {
+      Alert.alert('Connection Failed', `Cannot reach API at ${backendUrl}`);
+    } finally {
+      setCropLoading(false);
+    }
+  };
+
   // -------------------------------------------------------------
   // ACTION 3: Unified Multi-Modal Farm Audit
   // -------------------------------------------------------------
@@ -1712,6 +1775,58 @@ export default function App() {
                 ))}
               </ScrollView>
 
+              {/* Live Weather Station Selection */}
+              <View style={styles.formSection}>
+                <Text style={styles.formSectionTitle}>🛰️ Real-Time Weather Station (Open-Meteo NWP)</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.presetsRow}>
+                  {['Ludhiana', 'Karnal', 'Nagpur', 'Rajkot', 'Davanagere', 'Patna', 'Varanasi', 'Guntur', 'Indore'].map((dst) => (
+                    <TouchableOpacity
+                      key={dst}
+                      style={[styles.presetChip, cropDistrict.toLowerCase().includes(dst.toLowerCase()) && styles.cropChipActive]}
+                      onPress={() => {
+                        setCropDistrict(dst);
+                        handleFetchLiveWeather(dst);
+                      }}
+                    >
+                      <Text style={[styles.presetChipText, cropDistrict.toLowerCase().includes(dst.toLowerCase()) && { color: COLORS.white, fontWeight: '800' }]}>
+                        📍 {dst}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                <View style={styles.gridRow}>
+                  <Field label="Target District / City" value={cropDistrict} onChangeText={setCropDistrict} numeric={false} />
+                </View>
+                <TouchableOpacity
+                  style={[styles.secondaryButton, { marginTop: 4, marginBottom: 8 }, liveWeatherLoading && styles.buttonDisabled]}
+                  onPress={() => handleFetchLiveWeather(cropDistrict)}
+                  disabled={liveWeatherLoading}
+                >
+                  {liveWeatherLoading ? (
+                    <ActivityIndicator color={COLORS.forest} />
+                  ) : (
+                    <Text style={styles.secondaryButtonText}>🌤️ Fetch Live Weather Telemetry</Text>
+                  )}
+                </TouchableOpacity>
+
+                {liveWeatherTelemetry && (
+                  <View style={[styles.statusCard, { borderColor: '#38bdf8', borderWidth: 1.5, backgroundColor: '#f0f9ff', paddingVertical: 10 }]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#0369a1', letterSpacing: 0.5 }}>LIVE NWP TELEMETRY CONNECTED</Text>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: '#0f172a', marginVertical: 2 }}>
+                        📍 {liveWeatherTelemetry.station_name}, {liveWeatherTelemetry.state}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#334155' }}>
+                        🌡️ {liveWeatherTelemetry.temperature_c}°C | 💧 {liveWeatherTelemetry.relative_humidity_pct}% RH | 🌧️ {liveWeatherTelemetry.rainfall_forecast_7d_mm} mm
+                      </Text>
+                      <Text style={{ fontSize: 11, color: '#0284c7', marginTop: 2 }}>
+                        Radar: {liveWeatherTelemetry.source} ({liveWeatherTelemetry.weather_description})
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+
               {/* Inputs - grouped by theme, unit shown inside each field */}
               <View style={styles.formSection}>
                 <Text style={styles.formSectionTitle}>🧪 Soil Nutrients</Text>
@@ -1744,8 +1859,8 @@ export default function App() {
               </View>
 
               <TouchableOpacity
-                style={[styles.primaryButton, cropLoading && styles.buttonDisabled]}
-                onPress={handleRecommendCrops}
+                style={[styles.primaryButton, cropLoading && styles.buttonDisabled, { marginBottom: 10 }]}
+                onPress={handlePredictWithLiveWeather}
                 disabled={cropLoading}
                 accessibilityRole="button"
                 accessibilityState={{ disabled: cropLoading, busy: cropLoading }}
@@ -1753,8 +1868,16 @@ export default function App() {
                 {cropLoading ? (
                   <ActivityIndicator color="#ffffff" />
                 ) : (
-                  <Text style={styles.primaryButtonText}>🌾 Recommend Optimal Crops</Text>
+                  <Text style={styles.primaryButtonText}>🚀 Predict with Live Weather Telemetry</Text>
                 )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.secondaryButton, cropLoading && styles.buttonDisabled]}
+                onPress={handleRecommendCrops}
+                disabled={cropLoading}
+              >
+                <Text style={styles.secondaryButtonText}>🌾 Standard Agronomic Calculation</Text>
               </TouchableOpacity>
             </View>
 
@@ -1801,6 +1924,18 @@ export default function App() {
                     <Text style={styles.cropDetailLine}>
                       <Text style={styles.bold}>Expected Yield:</Text> {cand.projected_yield}
                     </Text>
+                    {cand.weather_rationale && (
+                      <View style={{ backgroundColor: '#e0f2fe', borderRadius: RADIUS.sm, padding: 6, marginVertical: 4 }}>
+                        <Text style={{ fontSize: 11.5, color: '#0369a1', fontWeight: '700' }}>
+                          🌤️ Live Weather: {cand.weather_rationale}
+                        </Text>
+                        {cand.thermal_factor && (
+                          <Text style={{ fontSize: 10.5, color: '#0284c7', marginTop: 2 }}>
+                            Thermal factor: {cand.thermal_factor}x | Moisture: {cand.moisture_factor}x
+                          </Text>
+                        )}
+                      </View>
+                    )}
                     {cand.cultivation_tips && cand.cultivation_tips[0] && (
                       <Text style={styles.cropTipText}>💡 {cand.cultivation_tips[0]}</Text>
                     )}

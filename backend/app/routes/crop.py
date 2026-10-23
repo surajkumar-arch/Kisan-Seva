@@ -15,7 +15,9 @@ from backend.app.services.crop_service import (
     recommend_crops_direct,
     DB_PATH,
 )
+from typing import Optional
 from backend.app.services.mongo_service import save_crop_recommendation_to_mongo
+from backend.app.services.realtime_weather_crop_service import realtime_weather_crop_service
 
 router = APIRouter(prefix="/api/crop", tags=["Crop Recommendation"])
 
@@ -126,3 +128,62 @@ async def get_crop_history(request_id: str):
         results.append(d)
 
     return {"status": "success", "data": results}
+
+
+class RealtimeWeatherCropRequest(BaseModel):
+    ph: float = Field(6.8, ge=0.0, le=14.0, description="Soil pH value")
+    nitrogen: float = Field(120.0, ge=0.0, le=300.0, description="Soil Nitrogen (N) kg/ha")
+    phosphorus: float = Field(35.0, ge=0.0, le=150.0, description="Soil Phosphorus (P) kg/ha")
+    potassium: float = Field(110.0, ge=0.0, le=350.0, description="Soil Potassium (K) kg/ha")
+    soil_type: str = Field("Alluvial Soil", description="Soil classification")
+    location_name: Optional[str] = Field("Ludhiana, Punjab", description="District or farming hub name")
+    lat: Optional[float] = Field(None, description="GPS Latitude")
+    lon: Optional[float] = Field(None, description="GPS Longitude")
+    override_temperature: Optional[float] = Field(None, description="Manual override for temp")
+    override_rainfall: Optional[float] = Field(None, description="Manual override for rain")
+
+
+@router.get("/live-weather-telemetry")
+def get_live_weather_telemetry(
+    lat: Optional[float] = None,
+    lon: Optional[float] = None,
+    location: Optional[str] = "Ludhiana"
+):
+    """Retrieve real-time meteorological conditions from live NWP radar."""
+    return realtime_weather_crop_service.fetch_live_weather(lat=lat, lon=lon, location_name=location)
+
+
+@router.post("/predict-with-live-weather")
+def predict_with_live_weather_endpoint(req: RealtimeWeatherCropRequest):
+    """
+    Evaluate crop suitability by fetching real-time meteorological conditions
+    and adapting neural rankings with climate sensitivity factors.
+    """
+    return realtime_weather_crop_service.predict_crops_with_live_weather(
+        ph=req.ph,
+        nitrogen=req.nitrogen,
+        phosphorus=req.phosphorus,
+        potassium=req.potassium,
+        soil_type=req.soil_type,
+        lat=req.lat,
+        lon=req.lon,
+        location_name=req.location_name,
+        override_temperature=req.override_temperature,
+        override_rainfall=req.override_rainfall
+    )
+
+
+@router.get("/demo-live-weather")
+def get_demo_live_weather_crop(district: str = "ludhiana"):
+    """
+    Instant benchmark demo evaluating real-time weather crop recommendations.
+    """
+    return realtime_weather_crop_service.predict_crops_with_live_weather(
+        ph=6.8,
+        nitrogen=130.0,
+        phosphorus=38.0,
+        potassium=115.0,
+        soil_type="Alluvial Soil",
+        location_name=district
+    )
+

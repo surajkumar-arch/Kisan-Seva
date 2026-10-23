@@ -962,72 +962,184 @@ elif active_view == "🌾 Precision Crop Recommendation Advisor":
     st.markdown("## 🌾 Precision Crop Recommendation Advisor")
     st.markdown("Evaluate soil chemical nutrients (N, P, K, pH) and micro-meteorological variables (Temperature, Humidity, Rainfall) against agronomic envelopes to recommend the highest-yielding, most sustainable crops.")
 
-    # 1. Preset Scenarios
-    st.markdown("#### ⚡ 1-Click Regional Agro-Climatic Presets")
-    crop_preset_options = {
-        "Custom Farm Input": None,
-        "🌾 Indo-Gangetic Alluvial Belt (Rice / Wheat / Sugarcane)": {
-            "ph": 6.8, "n": 160.0, "p": 50.0, "k": 140.0, "temp": 24.0, "hum": 65.0, "rain": 110.0, "soil": "Alluvial Soil"
-        },
-        "🌸 Deccan Plateau Black Soil (Cotton / Maize / Pulses)": {
-            "ph": 7.5, "n": 120.0, "p": 40.0, "k": 100.0, "temp": 30.0, "hum": 55.0, "rain": 85.0, "soil": "Black Soil"
-        },
-        "🥜 Semi-Arid Sandy Tracts (Groundnut / Moth Beans / Chickpea)": {
-            "ph": 6.6, "n": 60.0, "p": 45.0, "k": 70.0, "temp": 32.0, "hum": 45.0, "rain": 45.0, "soil": "Sandy Soil"
-        },
-        "🍃 Subtropical Hill Slope (Tea / Coffee / Kidney Beans)": {
-            "ph": 5.2, "n": 110.0, "p": 35.0, "k": 100.0, "temp": 20.0, "hum": 85.0, "rain": 220.0, "soil": "Red Soil"
-        },
-    }
+    # Regional & Live Weather Mode
+    crop_mode = st.radio(
+        "Select Crop Prediction Mode:",
+        ["🌤️ Real-Time NWP Radar & Live Weather Mode (Recommended)", "⚙️ Manual Regional Preset / Custom Inputs"],
+        index=0,
+        horizontal=True,
+    )
 
-    selected_crop_preset = st.selectbox("Choose a regional preset or input custom field readings:", list(crop_preset_options.keys()))
-    active_crop_data = crop_preset_options.get(selected_crop_preset)
+    if crop_mode == "🌤️ Real-Time NWP Radar & Live Weather Mode (Recommended)":
+        st.markdown("#### 🛰️ Real-Time Live Weather Crop Suitability Engine")
+        st.caption("Directly connects high-resolution Numerical Weather Prediction (NWP) radar and satellite meteorological telemetry to dynamically calibrate neural crop recommendations.")
 
-    st.markdown("---")
-    col_inp1, col_inp2 = st.columns(2)
+        w_col1, w_col2 = st.columns([1, 1])
+        with w_col1:
+            INDIAN_AGRO_DISTRICTS = [
+                "Ludhiana, Punjab",
+                "Karnal, Haryana",
+                "Nagpur, Maharashtra",
+                "Rajkot, Gujarat",
+                "Davanagere, Karnataka",
+                "Patna, Bihar",
+                "Varanasi, Uttar Pradesh",
+                "Guntur, Andhra Pradesh",
+                "Indore, Madhya Pradesh",
+                "Coimbatore, Tamil Nadu",
+                "Enter Custom District / City Name",
+            ]
+            sel_district = st.selectbox("Select Agricultural District / Weather Station:", INDIAN_AGRO_DISTRICTS, index=1)
+            target_district_query = sel_district.split(",")[0].strip()
+            if sel_district == "Enter Custom District / City Name":
+                target_district_query = st.text_input("Enter City / District Name (e.g. Nashik, Jaipur, Bathinda):", value="Nashik")
 
-    with col_inp1:
-        st.markdown("### 🧪 Soil Chemistry & Fertility")
-        c_ph = st.slider("Soil pH Level:", 0.0, 14.0, float(active_crop_data["ph"] if active_crop_data else 6.5), 0.1)
-        c_n = st.slider("Nitrogen (N) [kg/ha]:", 0.0, 300.0, float(active_crop_data["n"] if active_crop_data else 140.0), 5.0)
-        c_p = st.slider("Phosphorus (P) [kg/ha]:", 0.0, 150.0, float(active_crop_data["p"] if active_crop_data else 35.0), 2.0)
-        c_k = st.slider("Potassium (K) [kg/ha]:", 0.0, 350.0, float(active_crop_data["k"] if active_crop_data else 150.0), 5.0)
-        c_soil = st.selectbox(
-            "Primary Soil Classification:",
-            ["Alluvial Soil", "Black Soil", "Clay Soil", "Red Soil", "Sandy Soil", "Loamy Soil"],
-            index=["Alluvial Soil", "Black Soil", "Clay Soil", "Red Soil", "Sandy Soil", "Loamy Soil"].index(active_crop_data["soil"]) if active_crop_data and active_crop_data["soil"] in ["Alluvial Soil", "Black Soil", "Clay Soil", "Red Soil", "Sandy Soil", "Loamy Soil"] else 5
-        )
+            w_soil = st.selectbox(
+                "Observed Soil Type:",
+                ["Alluvial Soil", "Black Soil", "Clay Soil", "Red Soil", "Sandy Soil", "Loamy Soil"],
+                index=0,
+                key="w_soil_select"
+            )
+            w_ph = st.slider("Soil pH Level:", 0.0, 14.0, 6.8, 0.1, key="w_ph_slider")
 
-    with col_inp2:
-        st.markdown("### 🌤️ Weather & Climate Parameters")
-        c_temp = st.slider("Average Ambient Temperature (°C):", -5.0, 55.0, float(active_crop_data["temp"] if active_crop_data else 26.0), 0.5)
-        c_hum = st.slider("Relative Atmospheric Humidity (%):", 10.0, 100.0, float(active_crop_data["hum"] if active_crop_data else 65.0), 1.0)
-        c_rain = st.slider("Annual / Seasonal Rainfall (mm):", 0.0, 500.0, float(active_crop_data["rain"] if active_crop_data else 120.0), 5.0)
+        with w_col2:
+            st.markdown("##### 🧪 Soil Chemistry (Fertilizer N-P-K)")
+            w_n = st.slider("Nitrogen (N) [kg/ha]:", 0.0, 300.0, 140.0, 5.0, key="w_n_slider")
+            w_p = st.slider("Phosphorus (P) [kg/ha]:", 0.0, 150.0, 45.0, 2.0, key="w_p_slider")
+            w_k = st.slider("Potassium (K) [kg/ha]:", 0.0, 350.0, 150.0, 5.0, key="w_k_slider")
 
         st.markdown("<br>", unsafe_allow_html=True)
-        run_rec_btn = st.button("🌾 Predict Optimal Crops Now", type="primary", use_container_width=True)
+        live_w_btn1, live_w_btn2 = st.columns(2)
+        with live_w_btn1:
+            fetch_telemetry_btn = st.button("📡 Check Live Weather Telemetry Only", use_container_width=True)
+        with live_w_btn2:
+            run_live_crop_btn = st.button("🚀 Predict Crops with Live Weather Telemetry", type="primary", use_container_width=True)
 
-    if run_rec_btn:
-        with st.spinner("🌾 Running precision neural & agronomic crop suitability analysis..."):
-            try:
-                payload = {
-                    "ph": c_ph,
-                    "nitrogen": c_n,
-                    "phosphorus": c_p,
-                    "potassium": c_k,
-                    "temperature": c_temp,
-                    "humidity": c_hum,
-                    "rainfall": c_rain,
-                    "soil_type": c_soil,
-                }
-                resp = requests.post(f"{BACKEND_URL}/api/crop/predict-direct", json=payload, timeout=10)
-                if resp.status_code == 200:
-                    st.session_state.crop_recommendation_result = resp.json()
-                    st.success(f"✅ Recommendation Completed: Top Crop **{st.session_state.crop_recommendation_result['primary_crop']}** ({st.session_state.crop_recommendation_result['primary_suitability']}% Match)")
-                else:
-                    st.error(f"❌ Recommendation failed: {resp.text}")
-            except Exception as ex:
-                st.error(f"❌ API connection error: {str(ex)}")
+        if fetch_telemetry_btn:
+            with st.spinner(f"🛰️ Ingesting real-time weather radar for {target_district_query}..."):
+                try:
+                    w_resp = requests.get(f"{BACKEND_URL}/api/crop/live-weather-telemetry?location={target_district_query}", timeout=8)
+                    if w_resp.status_code == 200:
+                        st.session_state.last_live_telemetry = w_resp.json()
+                        st.success(f"✅ Live telemetry received for {target_district_query}!")
+                    else:
+                        st.error(f"Weather error: {w_resp.text}")
+                except Exception as ex:
+                    st.error(f"Network error: {str(ex)}")
+
+        if "last_live_telemetry" in st.session_state and st.session_state.last_live_telemetry:
+            t_data = st.session_state.last_live_telemetry
+            st.markdown(
+                f"""
+                <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); color: white; border-radius: 12px; padding: 18px 24px; margin-bottom: 20px; border-left: 5px solid #38bdf8;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <span style="background: rgba(56, 189, 248, 0.2); color: #38bdf8; padding: 4px 10px; border-radius: 9999px; font-weight: 700; font-size: 0.8rem;">LIVE NWP TELEMETRY</span>
+                            <h3 style="margin: 6px 0 2px 0; color: #f8fafc;">📍 {t_data['station_name']}, {t_data['state']} ({t_data['latitude']}°N, {t_data['longitude']}°E)</h3>
+                            <span style="font-size: 0.85rem; color: #94a3b8;">Data Source: <b>{t_data['source']}</b> | Condition: <b>{t_data['weather_description']}</b></span>
+                        </div>
+                        <div style="text-align: right;">
+                            <span style="font-size: 2.2rem; font-weight: 900; color: #38bdf8;">{t_data['temperature_c']}°C</span><br/>
+                            <span style="font-size: 0.85rem; color: #cbd5e1;">Humidity: <b>{t_data['relative_humidity_pct']}%</b></span>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 20px; margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px; font-size: 0.85rem; color: #94a3b8;">
+                        <div>🌧️ <b>7-Day Cumulative Rain:</b> {t_data['rainfall_forecast_7d_mm']} mm</div>
+                        <div>💨 <b>Wind Velocity:</b> {t_data['wind_speed_kmh']} km/h</div>
+                        <div>⏱️ <b>Telemetry Latency:</b> {t_data['telemetry_latency_ms']} ms</div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        if run_live_crop_btn:
+            with st.spinner(f"🌾 Ingesting live weather & computing climate-resilient crop rankings for {target_district_query}..."):
+                try:
+                    payload = {
+                        "district": target_district_query,
+                        "ph": w_ph,
+                        "nitrogen": w_n,
+                        "phosphorus": w_p,
+                        "potassium": w_k,
+                        "soil_type": w_soil,
+                    }
+                    resp = requests.post(f"{BACKEND_URL}/api/crop/predict-with-live-weather", json=payload, timeout=12)
+                    if resp.status_code == 200:
+                        st.session_state.crop_recommendation_result = resp.json()
+                        st.success(f"✅ Real-Time Weather Crop Prediction Finished! Top Crop: **{st.session_state.crop_recommendation_result['primary_crop']}** ({st.session_state.crop_recommendation_result['primary_suitability']}% Suitability)")
+                    else:
+                        st.error(f"❌ Crop prediction failed: {resp.text}")
+                except Exception as ex:
+                    st.error(f"❌ Connection error: {str(ex)}")
+
+    else:
+        # 1. Preset Scenarios
+        st.markdown("#### ⚡ 1-Click Regional Agro-Climatic Presets")
+        crop_preset_options = {
+            "Custom Farm Input": None,
+            "🌾 Indo-Gangetic Alluvial Belt (Rice / Wheat / Sugarcane)": {
+                "ph": 6.8, "n": 160.0, "p": 50.0, "k": 140.0, "temp": 24.0, "hum": 65.0, "rain": 110.0, "soil": "Alluvial Soil"
+            },
+            "🌸 Deccan Plateau Black Soil (Cotton / Maize / Pulses)": {
+                "ph": 7.5, "n": 120.0, "p": 40.0, "k": 100.0, "temp": 30.0, "hum": 55.0, "rain": 85.0, "soil": "Black Soil"
+            },
+            "🥜 Semi-Arid Sandy Tracts (Groundnut / Moth Beans / Chickpea)": {
+                "ph": 6.6, "n": 60.0, "p": 45.0, "k": 70.0, "temp": 32.0, "hum": 45.0, "rain": 45.0, "soil": "Sandy Soil"
+            },
+            "🍃 Subtropical Hill Slope (Tea / Coffee / Kidney Beans)": {
+                "ph": 5.2, "n": 110.0, "p": 35.0, "k": 100.0, "temp": 20.0, "hum": 85.0, "rain": 220.0, "soil": "Red Soil"
+            },
+        }
+
+        selected_crop_preset = st.selectbox("Choose a regional preset or input custom field readings:", list(crop_preset_options.keys()))
+        active_crop_data = crop_preset_options.get(selected_crop_preset)
+
+        st.markdown("---")
+        col_inp1, col_inp2 = st.columns(2)
+
+        with col_inp1:
+            st.markdown("### 🧪 Soil Chemistry & Fertility")
+            c_ph = st.slider("Soil pH Level:", 0.0, 14.0, float(active_crop_data["ph"] if active_crop_data else 6.5), 0.1)
+            c_n = st.slider("Nitrogen (N) [kg/ha]:", 0.0, 300.0, float(active_crop_data["n"] if active_crop_data else 140.0), 5.0)
+            c_p = st.slider("Phosphorus (P) [kg/ha]:", 0.0, 150.0, float(active_crop_data["p"] if active_crop_data else 35.0), 2.0)
+            c_k = st.slider("Potassium (K) [kg/ha]:", 0.0, 350.0, float(active_crop_data["k"] if active_crop_data else 150.0), 5.0)
+            c_soil = st.selectbox(
+                "Primary Soil Classification:",
+                ["Alluvial Soil", "Black Soil", "Clay Soil", "Red Soil", "Sandy Soil", "Loamy Soil"],
+                index=["Alluvial Soil", "Black Soil", "Clay Soil", "Red Soil", "Sandy Soil", "Loamy Soil"].index(active_crop_data["soil"]) if active_crop_data and active_crop_data["soil"] in ["Alluvial Soil", "Black Soil", "Clay Soil", "Red Soil", "Sandy Soil", "Loamy Soil"] else 5
+            )
+
+        with col_inp2:
+            st.markdown("### 🌤️ Weather & Climate Parameters")
+            c_temp = st.slider("Average Ambient Temperature (°C):", -5.0, 55.0, float(active_crop_data["temp"] if active_crop_data else 26.0), 0.5)
+            c_hum = st.slider("Relative Atmospheric Humidity (%):", 10.0, 100.0, float(active_crop_data["hum"] if active_crop_data else 65.0), 1.0)
+            c_rain = st.slider("Annual / Seasonal Rainfall (mm):", 0.0, 500.0, float(active_crop_data["rain"] if active_crop_data else 120.0), 5.0)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            run_rec_btn = st.button("🌾 Predict Optimal Crops Now", type="primary", use_container_width=True)
+
+        if run_rec_btn:
+            with st.spinner("🌾 Running precision neural & agronomic crop suitability analysis..."):
+                try:
+                    payload = {
+                        "ph": c_ph,
+                        "nitrogen": c_n,
+                        "phosphorus": c_p,
+                        "potassium": c_k,
+                        "temperature": c_temp,
+                        "humidity": c_hum,
+                        "rainfall": c_rain,
+                        "soil_type": c_soil,
+                    }
+                    resp = requests.post(f"{BACKEND_URL}/api/crop/predict-direct", json=payload, timeout=10)
+                    if resp.status_code == 200:
+                        st.session_state.crop_recommendation_result = resp.json()
+                        st.success(f"✅ Recommendation Completed: Top Crop **{st.session_state.crop_recommendation_result['primary_crop']}** ({st.session_state.crop_recommendation_result['primary_suitability']}% Match)")
+                    else:
+                        st.error(f"❌ Recommendation failed: {resp.text}")
+                except Exception as ex:
+                    st.error(f"❌ API connection error: {str(ex)}")
 
     if "crop_recommendation_result" in st.session_state and st.session_state.crop_recommendation_result:
         rec_data = st.session_state.crop_recommendation_result
@@ -1036,6 +1148,28 @@ elif active_view == "🌾 Precision Crop Recommendation Advisor":
         recs = rec_data["recommendations"]
 
         st.markdown("---")
+        
+        # Display live weather telemetry banner if returned with prediction
+        if "weather_telemetry" in rec_data and rec_data["weather_telemetry"]:
+            wt = rec_data["weather_telemetry"]
+            st.markdown(
+                f"""
+                <div style="background: rgba(14, 165, 233, 0.1); border: 1.5px solid #0ea5e9; border-radius: 10px; padding: 12px 18px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <span style="font-weight: 800; color: #0284c7; font-size: 0.95rem;">🌤️ Real-Time NWP Radar Telemetry Applied:</span>
+                        <span style="color: #0f172a; font-weight: 700; margin-left: 6px;">{wt.get('station_name')}, {wt.get('state')}</span>
+                        <span style="color: #64748b; font-size: 0.85rem; margin-left: 8px;">({wt.get('source')})</span>
+                    </div>
+                    <div style="display: flex; gap: 14px; font-size: 0.9rem; font-weight: 700;">
+                        <span style="color: #0369a1;">🌡️ {wt.get('temperature_c')}°C</span>
+                        <span style="color: #0369a1;">💧 {wt.get('relative_humidity_pct')}% RH</span>
+                        <span style="color: #0369a1;">🌧️ {wt.get('rainfall_forecast_7d_mm')} mm (7-day)</span>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
         st.markdown("## 🥇 Top Recommended Crop Match")
         
         # Primary Crop Hero Banner
@@ -1063,19 +1197,24 @@ elif active_view == "🌾 Precision Crop Recommendation Advisor":
         grid_cols = st.columns(len(recs))
         for i, crop_item in enumerate(recs):
             with grid_cols[i]:
-                st.markdown(
-                    f"""
-                    <div class="crop-pill" style="min-height: 220px;">
-                        <div style="font-size: 1.2rem; font-weight: 800; color: #065f46;">#{crop_item['rank']} {crop_item['crop_name']}</div>
-                        <div style="font-size: 0.95rem; font-weight: 800; color: #059669; margin: 4px 0;">{crop_item['suitability_score']:.1f}% Match</div>
-                        <div style="font-size: 0.8rem; color: #374151; margin-top: 6px;"><b>Yield:</b> {crop_item['projected_yield']}</div>
-                        <div style="font-size: 0.8rem; color: #374151;"><b>Water:</b> {crop_item['water_requirement']}</div>
-                        <div style="font-size: 0.8rem; color: #374151;"><b>Cycle:</b> {crop_item['growing_duration_days']}</div>
-                        <div style="font-size: 0.75rem; color: #6b7280; margin-top: 6px;"><i>{crop_item['cultivation_tips'][0] if crop_item['cultivation_tips'] else ''}</i></div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
+                    weather_badge_html = ""
+                    if crop_item.get("weather_rationale"):
+                        weather_badge_html = f"""<div style="background: #e0f2fe; color: #0369a1; border-radius: 6px; padding: 4px 6px; font-size: 0.72rem; margin-top: 6px; line-height: 1.2;">🌤️ <b>Live Weather:</b> {crop_item['weather_rationale']}</div>"""
+
+                    st.markdown(
+                        f"""
+                        <div class="crop-pill" style="min-height: 240px;">
+                            <div style="font-size: 1.2rem; font-weight: 800; color: #065f46;">#{crop_item['rank']} {crop_item['crop_name']}</div>
+                            <div style="font-size: 0.95rem; font-weight: 800; color: #059669; margin: 4px 0;">{crop_item['suitability_score']:.1f}% Match</div>
+                            <div style="font-size: 0.8rem; color: #374151; margin-top: 6px;"><b>Yield:</b> {crop_item['projected_yield']}</div>
+                            <div style="font-size: 0.8rem; color: #374151;"><b>Water:</b> {crop_item['water_requirement']}</div>
+                            <div style="font-size: 0.8rem; color: #374151;"><b>Cycle:</b> {crop_item['growing_duration_days']}</div>
+                            {weather_badge_html}
+                            <div style="font-size: 0.75rem; color: #6b7280; margin-top: 6px;"><i>{crop_item['cultivation_tips'][0] if crop_item['cultivation_tips'] else ''}</i></div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
 
         # Radar Envelope Comparison
         st.markdown("---")

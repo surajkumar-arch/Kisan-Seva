@@ -223,3 +223,63 @@ def test_epidemic_swarm_endpoints():
     data = resp_sim.json()
     assert data["target_crop"] == "Potato / Tomato"
     assert "RED ALERT" in data["epidemiological_metrics"]["threat_level"] or "AMBER WARNING" in data["epidemiological_metrics"]["threat_level"]
+
+
+# ---------------------------------------------------------------------------
+# 5. REAL-TIME WEATHER-DRIVEN CROP PREDICTION TESTS
+# ---------------------------------------------------------------------------
+
+def test_realtime_weather_crop_service_direct():
+    """Verify live meteorological fetch and weather-adjusted crop rankings."""
+    from backend.app.services.realtime_weather_crop_service import realtime_weather_crop_service
+
+    weather = realtime_weather_crop_service.fetch_live_weather(location_name="Ludhiana")
+    assert weather["success"] is True
+    assert "temperature_c" in weather
+    assert "humidity_pct" in weather
+    assert "cumulative_rainfall_7d_mm" in weather
+
+    # Test live prediction with soil inputs
+    rec = realtime_weather_crop_service.predict_crops_with_live_weather(
+        ph=6.8,
+        nitrogen=120.0,
+        phosphorus=35.0,
+        potassium=110.0,
+        soil_type="Alluvial Soil",
+        location_name="Ludhiana, Punjab"
+    )
+    assert rec["status"] == "SUCCESS"
+    assert len(rec["realtime_crop_rankings"]) > 0
+    top = rec["realtime_crop_rankings"][0]
+    assert "realtime_adjusted_score" in top
+    assert "live_weather_rationale" in top
+
+
+def test_realtime_weather_crop_endpoints():
+    """Verify HTTP GET /live-weather-telemetry, POST /predict-with-live-weather, and GET /demo-live-weather."""
+    resp_tele = client.get("/api/crop/live-weather-telemetry?location=Karnal")
+    assert resp_tele.status_code == 200
+    assert resp_tele.json()["success"] is True
+
+    resp_demo = client.get("/api/crop/demo-live-weather?district=karnal")
+    assert resp_demo.status_code == 200
+    assert resp_demo.json()["status"] == "SUCCESS"
+    assert "primary_recommended_crop" in resp_demo.json()
+
+    post_payload = {
+        "ph": 7.5,
+        "nitrogen": 115.0,
+        "phosphorus": 32.0,
+        "potassium": 105.0,
+        "soil_type": "Black Soil",
+        "location_name": "Nagpur, Maharashtra",
+        "override_temperature": 32.5,
+        "override_rainfall": 95.0
+    }
+    resp_post = client.post("/api/crop/predict-with-live-weather", json=post_payload)
+    assert resp_post.status_code == 200
+    post_data = resp_post.json()
+    assert post_data["status"] == "SUCCESS"
+    assert post_data["soil_context"]["soil_type"] == "Black Soil"
+    assert len(post_data["realtime_crop_rankings"]) > 0
+
