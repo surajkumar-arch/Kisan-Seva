@@ -226,7 +226,7 @@ def predict_soil_health(
         logits = model(tensor)
         probs = F.softmax(logits, dim=1).squeeze(0).numpy()
 
-    class_names = get_soil_class_names()
+    model_class_names = get_soil_class_names()
 
     if is_soil_model_trained():
         # Trained weights: trust the network directly (no colour priors)
@@ -239,11 +239,11 @@ def predict_soil_health(
         b_mean = float(np.mean(rgb[:, :, 2]))
         luminance = 0.299 * r_mean + 0.587 * g_mean + 0.114 * b_mean
 
-        prior_bias = np.ones(len(class_names), dtype=np.float32)
+        prior_bias = np.ones(len(model_class_names), dtype=np.float32)
 
         def _boost(name: str, amount: float) -> None:
-            if name in class_names:
-                prior_bias[class_names.index(name)] += amount
+            if name in model_class_names:
+                prior_bias[model_class_names.index(name)] += amount
 
         if r_mean > g_mean * 1.15 and r_mean > b_mean * 1.2:
             _boost("Red Soil", 2.0)
@@ -258,13 +258,24 @@ def predict_soil_health(
         adjusted_scores = probs * prior_bias
         adjusted_probs = adjusted_scores / np.sum(adjusted_scores)
 
-    pred_idx = int(np.argmax(adjusted_probs))
-    pred_soil_type = class_names[pred_idx]
-    pred_confidence = float(adjusted_probs[pred_idx])
+    # Expose the canonical six-class API taxonomy even when a trained
+    # checkpoint only predicts a subset of it.
+    canonical_probs = np.zeros(len(SOIL_CLASSES), dtype=np.float64)
+    for i, class_name in enumerate(model_class_names):
+        if class_name in SOIL_CLASSES:
+            canonical_probs[SOIL_CLASSES.index(class_name)] += float(adjusted_probs[i])
+    if canonical_probs.sum() <= 0:
+        canonical_probs.fill(1.0 / len(SOIL_CLASSES))
+    else:
+        canonical_probs /= canonical_probs.sum()
+
+    pred_idx = int(np.argmax(canonical_probs))
+    pred_soil_type = SOIL_CLASSES[pred_idx]
+    pred_confidence = float(canonical_probs[pred_idx])
 
     prob_dict = {
-        cls_name: round(float(adjusted_probs[i]), 4)
-        for i, cls_name in enumerate(class_names)
+        cls_name: round(float(canonical_probs[i]), 4)
+        for i, cls_name in enumerate(SOIL_CLASSES)
     }
 
     # Physical properties

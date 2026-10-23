@@ -82,5 +82,9 @@
     "multicrop::": "Multi-Crop Disease Dataset data.yaml class",
     "plantvillage::": "Mendeley PlantVillage class-folder name"
   },
-  "seed": 42
+  "seed": 42,
+  "temperature": 1.223037838935852,
+  "calibration_method": "temperature_scaling_validation_nll",
+  "held_out_test_accuracy": 0.9435475682810438,
+  "held_out_test_samples": 9849
 }

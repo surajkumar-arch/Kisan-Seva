@@ -20,6 +20,8 @@ class PlantPredictionResponse(BaseModel):
     status: str = "success"
     message: str = "Plant health analysis completed successfully"
     request_id: str
+    plant_name: Optional[str] = Field(None, description="Crop or plant name identified by the classifier")
+    specific_condition: Optional[str] = Field(None, description="Crop-specific disease label from the classifier")
     condition: str = Field(..., description="Detected plant health condition / disease name")
     is_healthy: bool = Field(..., description="Flag indicating if foliage is disease-free")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Model prediction confidence score")

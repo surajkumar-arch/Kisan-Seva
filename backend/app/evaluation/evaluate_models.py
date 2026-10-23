@@ -19,7 +19,7 @@ import torch.nn.functional as F
 from PIL import Image
 
 from backend.app.models.soil_net import SOIL_CLASSES, get_soil_model
-from backend.app.models.plant_net import PLANT_DISEASE_CLASSES, get_plant_model
+from backend.app.models.plant_net import get_plant_model, get_plant_class_names
 from backend.app.models.fusion_net import GatedMultiModalFusionNet, get_fusion_model
 from backend.app.models.crop_net import CROPS_LIST, get_crop_model
 from backend.app.utils.image_utils import preprocess_image
@@ -103,12 +103,13 @@ def evaluate_plant_model(samples_per_class: int = 15) -> Dict[str, Any]:
     """Evaluate Phase 3 MobileNetV3-Large Foliage Disease Classifier."""
     model = get_plant_model()
     model.eval()
+    class_names = get_plant_class_names()
 
     y_true = []
     y_pred = []
     latencies = []
 
-    for class_idx, class_name in enumerate(PLANT_DISEASE_CLASSES):
+    for class_idx, class_name in enumerate(class_names):
         for _ in range(samples_per_class):
             img_buf = generate_synthetic_field_image("plant", class_name)
             img = Image.open(img_buf).convert("RGB")
@@ -130,7 +131,7 @@ def evaluate_plant_model(samples_per_class: int = 15) -> Dict[str, Any]:
     accuracy = float(np.mean(y_true_np == y_pred_np))
 
     per_class_metrics = {}
-    for i, c_name in enumerate(PLANT_DISEASE_CLASSES):
+    for i, c_name in enumerate(class_names):
         tp = int(np.sum((y_pred_np == i) & (y_true_np == i)))
         fp = int(np.sum((y_pred_np == i) & (y_true_np != i)))
         fn = int(np.sum((y_pred_np != i) & (y_true_np == i)))
@@ -147,7 +148,7 @@ def evaluate_plant_model(samples_per_class: int = 15) -> Dict[str, Any]:
         }
 
     macro_f1 = float(np.mean([m["f1_score"] for m in per_class_metrics.values()]))
-    num_classes = len(PLANT_DISEASE_CLASSES)
+    num_classes = len(class_names)
     cm = np.zeros((num_classes, num_classes), dtype=int)
     for t, p in zip(y_true, y_pred):
         cm[t, p] += 1

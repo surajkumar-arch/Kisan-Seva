@@ -64,8 +64,12 @@ class SoilPrediction(BaseModel):
 
 class DiseasePrediction(BaseModel):
     disease_class: str = Field(..., alias="class", description="Diagnosed foliar pathology")
-    confidence: float = Field(..., ge=0.0, le=1.0, description="Calibrated posterior confidence score")
+    confidence: float = Field(
+        ..., ge=0.0, le=1.0,
+        description="Top-class probability; validation calibrated only when calibrated is true",
+    )
     raw_confidence: float = Field(..., ge=0.0, le=1.0, description="Raw softmax probability")
+    calibrated: bool = Field(False, description="Whether validation-fitted temperature scaling was applied")
     pathogen_type: str = Field("None", description="Causal agent: Fungal, Oomycete, Bacterial, Viral, None")
     severity_level: str = Field("None", description="None, Low, Moderate, Severe")
     probabilities: Dict[str, float] = Field(default_factory=dict, description="Full class posterior distribution")

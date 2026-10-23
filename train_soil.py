@@ -23,6 +23,7 @@ import torch.optim as optim
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 from torchvision import models, transforms
+from src.edaphnet.ml.calibration import TemperatureScaler
 
 logging.basicConfig(
     level=logging.INFO,
@@ -86,6 +87,11 @@ def parse_args():
         "--verify",
         action="store_true",
         help="Validate dataset structure without training",
+    )
+    parser.add_argument(
+        "--calibrate-only",
+        action="store_true",
+        help="Fit confidence calibration for the existing checkpoint without retraining",
     )
     return parser.parse_args()
 
@@ -309,6 +315,47 @@ def evaluate(model, data_loader, criterion, device):
     return total_loss / max(1, total), correct / max(1, total), correct, total
 
 
+def fit_validation_temperature(model, data_loader, device) -> float:
+    """Fit a single temperature on validation logits for calibrated probabilities."""
+    model.eval()
+    logits_batches = []
+    label_batches = []
+    with torch.no_grad():
+        for images, labels in data_loader:
+            images = images.to(device)
+            logits_batches.append(model(images).cpu())
+            label_batches.append(labels.cpu())
+    if not logits_batches:
+        raise ValueError("Cannot calibrate soil confidence: validation split is empty")
+
+    calibrator = TemperatureScaler(initial_temperature=1.0)
+    return calibrator.fit(torch.cat(logits_batches), torch.cat(label_batches))
+
+
+def write_class_metadata(
+    output_dir: Path,
+    class_names: List[str],
+    temperature: float,
+    data_dir: Path = DEFAULT_DATA_DIR,
+) -> Path:
+    metadata_path = output_dir / "class_labels.json"
+    metadata_path.write_text(
+        json.dumps(
+            {
+                "classes": class_names,
+                "num_classes": len(class_names),
+                "backbone": "efficientnet_b0",
+                "dataset": str(data_dir.resolve()),
+                "temperature": temperature,
+                "calibration_method": "temperature_scaling_validation_nll",
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return metadata_path
+
+
 def train_and_evaluate(args):
     data_dir = Path(args.data_dir)
     output_dir = Path(args.output_dir)
@@ -333,6 +380,32 @@ def train_and_evaluate(args):
         logger.info("Dataset verification complete.")
         return True
 
+    best_weights_path = output_dir / "soil_efficientnet_b0.pt"
+    if args.calibrate_only:
+        if not best_weights_path.is_file():
+            logger.error("Cannot calibrate: checkpoint not found at %s", best_weights_path)
+            return False
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = build_model(len(class_names), pretrained=False).to(device)
+        model.load_state_dict(torch.load(best_weights_path, map_location=device, weights_only=True))
+        temperature = fit_validation_temperature(model, val_loader, device)
+        _, test_accuracy, correct, total = evaluate(
+            model, test_loader, nn.CrossEntropyLoss(), device
+        )
+        metadata_path = write_class_metadata(output_dir, class_names, temperature, data_dir)
+        logger.info(
+            "Existing checkpoint held-out accuracy: %.2f%% (%d/%d).",
+            test_accuracy * 100,
+            correct,
+            total,
+        )
+        logger.info(
+            "Saved validation-fitted temperature %.4f to %s; no model weights were changed.",
+            temperature,
+            metadata_path,
+        )
+        return True
+
     output_dir.mkdir(parents=True, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info("Compute device: %s", device)
@@ -344,7 +417,6 @@ def train_and_evaluate(args):
     )
 
     best_val_acc = -1.0
-    best_weights_path = output_dir / "soil_efficientnet_b0.pt"
     start_time = time.time()
     for epoch in range(1, args.epochs + 1):
         model.train()
@@ -385,6 +457,8 @@ def train_and_evaluate(args):
         best_val_acc * 100,
     )
     model.load_state_dict(torch.load(best_weights_path, map_location=device))
+    temperature = fit_validation_temperature(model, val_loader, device)
+    logger.info("Validation-fitted confidence temperature: %.4f", temperature)
     test_loss, test_accuracy, correct, total = evaluate(model, test_loader, criterion, device)
     logger.info(
         "Held-out test Loss: %.4f Acc: %.2f%% (%d/%d)",
@@ -394,18 +468,7 @@ def train_and_evaluate(args):
         total,
     )
 
-    metadata_path = output_dir / "class_labels.json"
-    with metadata_path.open("w", encoding="utf-8") as metadata_file:
-        json.dump(
-            {
-                "classes": class_names,
-                "num_classes": len(class_names),
-                "backbone": "efficientnet_b0",
-                "dataset": str(data_dir.resolve()),
-            },
-            metadata_file,
-            indent=2,
-        )
+    metadata_path = write_class_metadata(output_dir, class_names, temperature, data_dir)
     logger.info("Saved class metadata: %s", metadata_path)
 
     if args.export_onnx:

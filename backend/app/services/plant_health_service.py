@@ -26,6 +26,26 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 DB_PATH = BASE_DIR / "data" / "smart_agriculture.db"
 
 
+def _split_crop_label(label: str) -> Tuple[str, str]:
+    """Make a readable crop and disease name from a classifier class label."""
+    clean = label.strip()
+    for namespace in ("plantvillage::", "multicrop::", "imagefolder::"):
+        clean = clean.removeprefix(namespace)
+    if clean.casefold() == "background_without_leaves":
+        return "Unknown", "No leaf detected"
+
+    if "___" in clean:
+        crop, disease = clean.split("___", 1)
+    elif "_" in clean and clean.lower() not in {"healthy_foliage", "early_blight", "late_blight", "powdery_mildew", "leaf_rust", "bacterial_spot", "yellow_leaf_curl"}:
+        crop, disease = clean.split("_", 1)
+    else:
+        return "Unknown", clean.replace("_", " ").strip().title()
+
+    crop = crop.replace(",", " ").replace("_", " ").strip().title()
+    disease = disease.replace("_", " ").replace("(", "").replace(")", "").strip().title()
+    return crop or "Unknown", disease or "Unknown condition"
+
+
 def init_phase3_db(db_path: Optional[Path] = None) -> None:
     """Ensure plant_health_predictions table exists in SQLite database."""
     target_path = db_path or DB_PATH
@@ -96,6 +116,8 @@ def predict_plant_health(
 
     class_names = get_plant_class_names()
     trained = is_plant_model_trained()
+    top_class_index = int(np.argmax(probs))
+    plant_name, specific_condition = _split_crop_label(class_names[top_class_index])
 
     if trained:
         # Trained weights: trust the network directly (no colour priors)
@@ -122,13 +144,39 @@ def predict_plant_health(
         adjusted_scores = probs * prior_bias
         adjusted_probs = adjusted_scores / np.sum(adjusted_scores)
 
-    pred_idx = int(np.argmax(adjusted_probs))
-    pred_condition = class_names[pred_idx]
-    pred_confidence = float(adjusted_probs[pred_idx])
+    # Group crop-specific checkpoint labels into the stable public diagnosis
+    # classes used by the API and its treatment metadata.
+    grouped_probs = np.zeros(len(PLANT_DISEASE_CLASSES), dtype=np.float64)
+    for i, label in enumerate(class_names):
+        normalized = label.lower().replace(" ", "_")
+        if "healthy" in normalized:
+            group = "Healthy Foliage"
+        elif "late" in normalized:
+            group = "Late Blight"
+        elif "mildew" in normalized:
+            group = "Powdery Mildew"
+        elif "rust" in normalized:
+            group = "Leaf Rust"
+        elif any(term in normalized for term in ("bacterial", "blackrot", "black_rot", "rot", "moko")):
+            group = "Bacterial Spot"
+        elif any(term in normalized for term in ("virus", "mosaic", "curl", "whitefly", "insectpest", "yellowish")):
+            group = "Yellow Leaf Curl"
+        else:
+            group = "Early Blight"
+        grouped_probs[PLANT_DISEASE_CLASSES.index(group)] += float(adjusted_probs[i])
+
+    if grouped_probs.sum() <= 0:
+        grouped_probs.fill(1.0 / len(PLANT_DISEASE_CLASSES))
+    else:
+        grouped_probs /= grouped_probs.sum()
+
+    pred_idx = int(np.argmax(grouped_probs))
+    pred_condition = PLANT_DISEASE_CLASSES[pred_idx]
+    pred_confidence = float(grouped_probs[pred_idx])
 
     prob_dict = {
-        cls_name: round(float(adjusted_probs[i]), 4)
-        for i, cls_name in enumerate(class_names)
+        cls_name: round(float(grouped_probs[i]), 4)
+        for i, cls_name in enumerate(PLANT_DISEASE_CLASSES)
     }
 
     meta = get_disease_metadata(pred_condition)
@@ -184,6 +232,8 @@ def predict_plant_health(
             else "Low-confidence diagnosis: the leaf may be from an unsupported crop or the photo is unclear. Retake a close, well-lit photo of a single leaf."
         ),
         request_id=request_id,
+        plant_name=plant_name,
+        specific_condition=specific_condition,
         condition=pred_condition,
         is_healthy=is_healthy,
         confidence=round(pred_confidence, 4),

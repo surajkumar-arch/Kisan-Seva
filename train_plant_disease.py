@@ -29,6 +29,7 @@ from PIL import Image
 from torch.utils.data import ConcatDataset, DataLoader, Dataset, random_split
 from torchvision import datasets, models, transforms
 from tqdm import tqdm
+from src.edaphnet.ml.calibration import TemperatureScaler
 
 logging.basicConfig(
     level=logging.INFO,
@@ -80,6 +81,11 @@ def parse_args():
         help="Export model to ONNX format",
     )
     parser.add_argument("--verify", action="store_true", help="Verify dataset structure without training")
+    parser.add_argument(
+        "--calibrate-only",
+        action="store_true",
+        help="Fit confidence calibration for the existing checkpoint without retraining",
+    )
     return parser.parse_args()
 
 
@@ -587,6 +593,21 @@ def build_model(backbone_name: str, num_classes: int, pretrained_backbone: bool 
     return model
 
 
+def fit_validation_temperature(model: nn.Module, data_loader: DataLoader, device: torch.device) -> float:
+    """Fit one temperature parameter using validation logits and labels."""
+    model.eval()
+    logits_batches = []
+    label_batches = []
+    with torch.no_grad():
+        for images, labels in data_loader:
+            logits_batches.append(model(images.to(device)).cpu())
+            label_batches.append(labels.cpu())
+    if not logits_batches:
+        raise ValueError("Cannot calibrate disease confidence: validation split is empty")
+    calibrator = TemperatureScaler(initial_temperature=1.0)
+    return calibrator.fit(torch.cat(logits_batches), torch.cat(label_batches))
+
+
 def initialize_matching_weights(
     model: nn.Module,
     checkpoint_path: Path,
@@ -670,6 +691,7 @@ def train_and_evaluate(args):
     )
     num_classes = len(class_names)
     logger.info(f"Target classes ({num_classes}): {class_names}")
+    best_weights_path = output_dir / f"plant_{args.backbone}.pt"
     if args.verify:
         logger.info(
             "Verification complete: %d training samples and %d validation samples are ready.",
@@ -678,6 +700,54 @@ def train_and_evaluate(args):
         )
         if test_loader is not None:
             logger.info("Test split contains %d samples.", len(test_loader.dataset))
+        return True
+
+    if args.calibrate_only:
+        if not best_weights_path.is_file():
+            logger.error("Cannot calibrate: checkpoint not found at %s", best_weights_path)
+            return False
+        metadata_path = output_dir / "class_labels.json"
+        if not metadata_path.is_file():
+            logger.error("Cannot calibrate: class metadata not found at %s", metadata_path)
+            return False
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        if metadata.get("classes") != class_names:
+            logger.error(
+                "Current dataset class mapping does not match the checkpoint metadata; "
+                "refusing to calibrate against a different class order."
+            )
+            return False
+
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = build_model(args.backbone, num_classes, pretrained_backbone=False).to(device)
+        model.load_state_dict(torch.load(best_weights_path, map_location=device, weights_only=True))
+        temperature = fit_validation_temperature(model, val_loader, device)
+        metadata["temperature"] = temperature
+        metadata["calibration_method"] = "temperature_scaling_validation_nll"
+
+        if test_loader is not None:
+            correct_test = 0
+            total_test = 0
+            model.eval()
+            with torch.no_grad():
+                for images, labels in test_loader:
+                    outputs = model(images.to(device))
+                    correct_test += int((outputs.argmax(dim=1).cpu() == labels).sum().item())
+                    total_test += labels.size(0)
+            logger.info(
+                "Existing checkpoint held-out accuracy: %.2f%% (%d/%d).",
+                100.0 * correct_test / max(1, total_test),
+                correct_test,
+                total_test,
+            )
+            metadata["held_out_test_accuracy"] = correct_test / max(1, total_test)
+            metadata["held_out_test_samples"] = total_test
+        metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+        logger.info(
+            "Saved validation-fitted temperature %.4f to %s; no model weights were changed.",
+            temperature,
+            metadata_path,
+        )
         return True
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -715,8 +785,6 @@ def train_and_evaluate(args):
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
 
     best_val_acc = -1.0
-    best_weights_path = output_dir / f"plant_{args.backbone}.pt"
-
     logger.info(f"Starting training for {args.epochs} epochs...")
     start_time = time.time()
 
@@ -787,6 +855,8 @@ def train_and_evaluate(args):
     total_time = time.time() - start_time
     logger.info(f"Training completed in {total_time / 60:.2f} minutes. Best Val Accuracy: {best_val_acc * 100:.2f}%")
     model.load_state_dict(torch.load(best_weights_path, map_location=device))
+    temperature = fit_validation_temperature(model, val_loader, device)
+    logger.info("Validation-fitted confidence temperature: %.4f", temperature)
 
     # Save Class Metadata
     class_meta_path = output_dir / "class_labels.json"
@@ -806,6 +876,8 @@ def train_and_evaluate(args):
                     "multicrop::": "Multi-Crop Disease Dataset data.yaml class",
                     "plantvillage::": "Mendeley PlantVillage class-folder name",
                 },
+                "temperature": temperature,
+                "calibration_method": "temperature_scaling_validation_nll",
                 "seed": args.seed,
             },
             f,
@@ -831,6 +903,10 @@ def train_and_evaluate(args):
             correct_test,
             total_test,
         )
+        class_metadata = json.loads(class_meta_path.read_text(encoding="utf-8"))
+        class_metadata["held_out_test_accuracy"] = test_accuracy
+        class_metadata["held_out_test_samples"] = total_test
+        class_meta_path.write_text(json.dumps(class_metadata, indent=2), encoding="utf-8")
 
     # Export to ONNX for mobile / edge inference
     if args.export_onnx:

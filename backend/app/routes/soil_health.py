@@ -15,7 +15,7 @@ from backend.app.schemas.soil_schema import (
     SoilPredictionResponse,
     SoilPhysicalProperties,
 )
-from backend.app.models.soil_net import SOIL_CLASSES, SOIL_METADATA, get_soil_class_names
+from backend.app.models.soil_net import SOIL_CLASSES, SOIL_METADATA
 from backend.app.utils.image_utils import (
     validate_image_file,
     ImageValidationError,
@@ -39,7 +39,9 @@ async def get_soil_classes():
     """Retrieve list of supported soil classes and their physical profiles."""
     return {
         "status": "success",
-        "classes": get_soil_class_names(),
+        # The public API contract is the full supported taxonomy. A checkpoint
+        # may cover only a subset of those classes.
+        "classes": SOIL_CLASSES,
         "metadata": SOIL_METADATA,
     }
 

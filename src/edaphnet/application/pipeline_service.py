@@ -87,18 +87,18 @@ class EdaphNetPipelineService:
             name="soil_classifier",
             version="1.3.0",
             framework="pytorch",
-            dataset_version="soil-types-v2.1",
+            dataset_version="soil-types-four-class-v1",
             preprocessing_version="norm-imagenet-224",
-            metrics={"accuracy": 0.942, "f1_macro": 0.938, "ece": 0.034},
+            metrics={"accuracy": 0.9684, "held_out_test_samples": 158},
             status=ModelStatus.PRODUCTION,
         )
         self.registry.register(
             name="plant_disease_classifier",
-            version="2.0.0",
+            version="2.1.0",
             framework="pytorch",
-            dataset_version="plantvillage-augmented-v3.0",
+            dataset_version="multi-crop-plantvillage-69-class-v1",
             preprocessing_version="norm-imagenet-224",
-            metrics={"accuracy": 0.965, "f1_macro": 0.961, "ece": 0.028},
+            metrics={"accuracy": 0.9435, "held_out_test_samples": 9849},
             status=ModelStatus.PRODUCTION,
         )
         self.registry.register(

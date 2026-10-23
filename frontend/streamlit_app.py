@@ -31,6 +31,8 @@ def render_plant_disease_result_card(p_res: dict):
     """Render comprehensive diagnostic report for leaf foliage disease."""
     is_healthy = p_res.get("is_healthy", False)
     cond = p_res.get("condition", "Unknown")
+    plant_name = p_res.get("plant_name", "Unknown")
+    specific_condition = p_res.get("specific_condition", cond)
     pathogen = p_res.get("pathogen_type", "None")
     severity = p_res.get("severity_level", "None")
     score = p_res.get("plant_health_score", 0)
@@ -50,7 +52,8 @@ def render_plant_disease_result_card(p_res: dict):
             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f3f4f6; padding-bottom: 12px; margin-bottom: 15px;">
                 <div>
                     <span style="background: {status_color}; color: white; padding: 4px 12px; border-radius: 9999px; font-weight: 700; font-size: 0.8rem; letter-spacing: 0.05em;">{badge_text}</span>
-                    <h2 style="margin: 8px 0 0 0; color: #111827; font-size: 1.6rem; font-weight: 800;">{cond}</h2>
+                    <h2 style="margin: 8px 0 0 0; color: #111827; font-size: 1.6rem; font-weight: 800;">{plant_name}: {specific_condition}</h2>
+                    <span style="color: #6b7280; font-size: 0.9rem;">Broad diagnosis category: {cond}</span>
                 </div>
                 <div style="text-align: right;">
                     <span style="font-size: 0.85rem; color: #6b7280;">Request ID: <b>{p_res.get('request_id', 'N/A')}</b></span><br/>

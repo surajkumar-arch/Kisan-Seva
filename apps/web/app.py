@@ -25,7 +25,17 @@ import streamlit as st
 # Direct import of Pipeline Service
 from src.edaphnet.application.pipeline_service import EdaphNetPipelineService
 from src.edaphnet.config.settings import settings
-from src.edaphnet.domain.enums import ReliabilityLevel
+from src.edaphnet.domain.models import SoilPrediction
+
+
+def format_disease_label(class_name: str) -> str:
+    """Turn namespaced training labels into readable crop and disease names."""
+    for namespace in ("plantvillage::", "multicrop::", "imagefolder::"):
+        class_name = class_name.removeprefix(namespace)
+    if "___" in class_name:
+        crop, disease = class_name.split("___", 1)
+        class_name = f"{crop}: {disease}"
+    return class_name.replace("_", " ").strip().title()
 
 # Streamlit Page Config
 st.set_page_config(
@@ -116,7 +126,7 @@ pipeline = get_pipeline()
 
 # Navigation Sidebar
 with st.sidebar:
-    st.image("https://images.unsplash.com/photo-1592982537447-7440770cbfc9?w=300&auto=format&fit=crop&q=80", caption="EDAPHNET Enterprise AI", use_container_width=True)
+    st.image("https://images.unsplash.com/photo-1592982537447-7440770cbfc9?w=300&auto=format&fit=crop&q=80", caption="EDAPHNET Enterprise AI", width="stretch")
     st.markdown("### Navigation")
     page = st.radio(
         "Select Portal Module:",
@@ -150,13 +160,13 @@ if page == "🌾 Guided Analysis (8 Steps)":
         st.subheader("Step 1: Upload Soil Image")
         soil_file = st.file_uploader("Soil Surface Photograph (JPG/PNG)", type=["jpg", "jpeg", "png"], key="guided_soil")
         if soil_file:
-            st.image(soil_file, caption="Selected Soil Sample", use_container_width=True)
+            st.image(soil_file, caption="Selected Soil Sample", width="stretch")
 
     with col2:
         st.subheader("Step 2: Upload Plant Leaf Image")
         leaf_file = st.file_uploader("Foliage/Leaf Photograph (JPG/PNG)", type=["jpg", "jpeg", "png"], key="guided_leaf")
         if leaf_file:
-            st.image(leaf_file, caption="Selected Leaf Sample", use_container_width=True)
+            st.image(leaf_file, caption="Selected Leaf Sample", width="stretch")
 
     st.subheader("Step 3: Enter Available Agronomic & Climate Parameters")
     st.caption("Leave empty if laboratory test is unavailable. The system will apply the Missing Data Strategy.")
@@ -178,7 +188,7 @@ if page == "🌾 Guided Analysis (8 Steps)":
     st.markdown("---")
     st.subheader("Step 4: Execute Production ML Pipeline")
 
-    if st.button("🚀 Analyze Field Sample", type="primary", use_container_width=True):
+    if st.button("🚀 Analyze Field Sample", type="primary", width="stretch"):
         soil_bytes = soil_file.getvalue() if soil_file else None
         leaf_bytes = leaf_file.getvalue() if leaf_file else None
 
@@ -211,34 +221,39 @@ if page == "🌾 Guided Analysis (8 Steps)":
         with pred_col1:
             st.markdown("#### 🌱 Soil Identification")
             if response.soil:
-                if response.soil.reliability == ReliabilityLevel.ABSTAIN:
-                    st.error(f"❌ Soil Image Rejected: {response.soil.quality_report.reasons if response.soil.quality_report else 'OOD'}")
+                if response.soil.soil_class == "Rejected":
+                    st.error(f"Soil image rejected: {response.reliability.message}")
                 else:
-                    st.metric("Identified Soil Type", response.soil.soil_type.replace('_', ' ').title(), f"Confidence: {response.soil.confidence*100:.1f}%")
-                    st.write(f"**Calibrated:** {response.soil.calibrated} | **OOD Distance:** {response.soil.ood_score:.2f}")
+                    st.metric("Identified Soil Type", response.soil.soil_class.replace('_', ' ').title(), f"Confidence: {response.soil.confidence*100:.1f}%")
+                    st.write(f"**Calibrated:** {response.soil.calibrated} | **Raw confidence:** {response.soil.raw_confidence*100:.1f}%")
 
                     # Bar chart of top classes
-                    probs_df = pd.DataFrame(list(response.soil.top_k_probabilities.items()), columns=["Soil Type", "Probability"])
+                    probs_df = pd.DataFrame(list(response.soil.probabilities.items()), columns=["Soil Type", "Probability"])
                     fig_soil = px.bar(probs_df, x="Probability", y="Soil Type", orientation="h", title="Calibrated Posterior Probability")
                     fig_soil.update_layout(height=220, margin=dict(l=0, r=0, t=30, b=0))
-                    st.plotly_chart(fig_soil, use_container_width=True)
+                    st.plotly_chart(fig_soil, width="stretch")
             else:
                 st.info("No soil image provided for classification.")
 
         with pred_col2:
             st.markdown("#### 🔬 Foliage Pathology & Lesion Diagnostics")
             if response.disease:
-                if response.disease.reliability == ReliabilityLevel.ABSTAIN:
-                    st.error(f"❌ Leaf Image Rejected: {response.disease.quality_report.reasons if response.disease.quality_report else 'OOD'}")
+                if response.disease.disease_class == "Rejected":
+                    st.error(f"Leaf image rejected: {response.reliability.message}")
                 else:
-                    st.metric("Detected Condition", response.disease.disease_class.replace('_', ' ').title(), f"Confidence: {response.disease.confidence*100:.1f}%")
-                    st.write(f"**Host Crop:** {response.disease.crop_name.title()} | **Pathogen:** {response.disease.pathogen_type or 'Biotic'}")
+                    disease_confidence_label = "Calibrated" if response.disease.calibrated else "Uncalibrated"
+                    st.metric(
+                        "Detected Condition",
+                        format_disease_label(response.disease.disease_class),
+                        f"{disease_confidence_label} confidence: {response.disease.confidence*100:.1f}%",
+                    )
+                    st.write(f"**Pathogen:** {response.disease.pathogen_type} | **Severity:** {response.disease.severity_level}")
 
                     if response.segmentation:
-                        st.warning(f"⚠️ **Infected Area (U-Net):** {response.segmentation.affected_area_percentage:.1f}% ({response.segmentation.severity_grade.title()})")
+                        st.warning(f"**Infected Area (U-Net):** {response.segmentation.affected_area_percentage:.1f}%")
 
-                    if response.localizations:
-                        st.info(f"🎯 **Lesions Localized (YOLO):** {len(response.localizations)} bounding boxes detected")
+                    if response.localization and response.localization.detected:
+                        st.info(f"**Lesions Localized (YOLO):** {response.localization.num_lesions} bounding boxes detected")
             else:
                 st.info("No leaf image provided for pathology analysis.")
 
@@ -259,17 +274,22 @@ if page == "🌾 Guided Analysis (8 Steps)":
             st.markdown("#### 🧪 Missing Laboratory Data Audit")
             missing_data = [
                 {
-                    "Parameter": m.measurement,
+                    "Parameter": m.parameter,
                     "Status": m.status.value.upper(),
-                    "Default Value Imputed": m.imputed_value,
-                    "Critical": "YES" if m.is_critical else "NO",
+                    "Estimated Value": m.estimated_value,
+                    "Recommended Action": m.recommended_action,
                 }
                 for m in response.missing_measurements
             ]
             st.table(pd.DataFrame(missing_data))
 
-            if rel.additional_measurements_recommended:
-                st.info(f"💡 **Recommended Action**: For higher accuracy, test laboratory levels for: {', '.join(rel.additional_measurements_recommended)}")
+            recommended_actions = [
+                measurement.recommended_action
+                for measurement in response.missing_measurements
+                if measurement.recommended_action
+            ]
+            if recommended_actions:
+                st.info("Recommended actions: " + " ".join(recommended_actions))
 
         # -------------------------------------------------------------
         # STEP 7: REVIEW CROP RECOMMENDATIONS
@@ -280,10 +300,10 @@ if page == "🌾 Guided Analysis (8 Steps)":
             for i, rec in enumerate(response.recommendations[:5]):
                 with rec_cols[i]:
                     st.markdown(f"**#{rec.rank} {rec.crop_name.title()}**")
-                    st.metric("Suitability", f"{rec.suitability_score*100:.1f}%")
-                    st.caption(f"Risk: {rec.climate_risk_level.title()}")
-                    for r in rec.suitability_reasons[:2]:
-                        st.caption(f"• {r}")
+                    st.metric("Suitability", f"{rec.suitability_score:.1f}%")
+                    st.caption(f"{rec.compatibility_grade} | Yield: {rec.projected_yield}")
+                    for tip in rec.cultivation_tips[:2]:
+                        st.caption(f"• {tip}")
         else:
             st.warning("No crop recommendations generated.")
 
@@ -295,19 +315,20 @@ if page == "🌾 Guided Analysis (8 Steps)":
 
         with xai_col1:
             st.markdown("#### Vision Attention Overlays (Grad-CAM)")
-            if response.disease and response.disease.gradcam_overlay_url:
-                st.image(response.disease.gradcam_overlay_url, caption="Foliar Disease Lesion Activation Map", use_container_width=True)
-            elif response.soil and response.soil.gradcam_overlay_url:
-                st.image(response.soil.gradcam_overlay_url, caption="Soil Texture Feature Map", use_container_width=True)
+            explainability = response.explainability
+            if explainability and explainability.gradcam_leaf_url:
+                st.image(explainability.gradcam_leaf_url, caption="Foliar Disease Lesion Activation Map", width="stretch")
+            elif explainability and explainability.gradcam_soil_url:
+                st.image(explainability.gradcam_soil_url, caption="Soil Texture Feature Map", width="stretch")
             else:
                 st.info("Grad-CAM overlays generated in-memory or saved directly.")
 
         with xai_col2:
             st.markdown("#### Recommendation Feature Attributions (SHAP Drivers)")
-            if response.recommendations and response.recommendations[0].suitability_reasons:
+            if response.recommendations and response.recommendations[0].feature_contributions:
                 st.markdown(f"**Key drivers for top recommendation ({response.recommendations[0].crop_name.title()}):**")
-                for reason in response.recommendations[0].suitability_reasons:
-                    st.markdown(f"- `{reason}`")
+                for feature, contribution in response.recommendations[0].feature_contributions.items():
+                    st.markdown(f"- `{feature}`: {contribution:+.1f}")
 
 
 # =========================================================================
@@ -323,7 +344,7 @@ elif page == "🔬 Plant Disease Diagnostic":
         pil_img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
         col1, col2 = st.columns(2)
         with col1:
-            st.image(pil_img, caption="Foliage Specimen", use_container_width=True)
+            st.image(pil_img, caption="Foliage Specimen", width="stretch")
 
         with col2:
             with st.spinner("Evaluating Quality Gate & Disease Pathology..."):
@@ -331,18 +352,11 @@ elif page == "🔬 Plant Disease Diagnostic":
                 if not quality.is_acceptable:
                     st.error(f"Image Rejected: {', '.join(quality.reasons)}")
                 else:
-                    pred = pipeline.disease_model.predict(pil_img)
-                    st.subheader(f"Condition: {pred['disease_class'].replace('_', ' ').title()}")
-                    st.metric("Calibrated Confidence", f"{pred['confidence']*100:.1f}%")
-                    st.write(f"**Host Crop:** {pred['crop_name'].title()} | **Pathogen:** {pred.get('pathogen_type', 'Biotic')}")
-
-                    st.markdown("#### Prescribed Agricultural Treatment")
-                    for t in pred.get("treatment", []):
-                        st.markdown(f"- ✅ {t}")
-
-                    st.markdown("#### Preventive Measures")
-                    for p in pred.get("preventive_measures", []):
-                        st.markdown(f"- 🛡️ {p}")
+                    pred, _ = pipeline.disease_model.predict(pil_img)
+                    st.subheader(f"Condition: {format_disease_label(pred.disease_class)}")
+                    confidence_label = "Calibrated Confidence" if pred.calibrated else "Model Confidence (Uncalibrated)"
+                    st.metric(confidence_label, f"{pred.confidence*100:.1f}%")
+                    st.write(f"**Pathogen:** {pred.pathogen_type} | **Severity:** {pred.severity_level}")
 
 
 # =========================================================================
@@ -358,18 +372,22 @@ elif page == "🌱 Soil Classification":
         soil_pil = Image.open(io.BytesIO(bytes_data)).convert("RGB")
         scol1, scol2 = st.columns(2)
         with scol1:
-            st.image(soil_pil, caption="Soil Specimen", use_container_width=True)
+            st.image(soil_pil, caption="Soil Specimen", width="stretch")
 
         with scol2:
             quality = pipeline.quality_gate.validate_soil_image(bytes_data)
             if not quality.is_acceptable:
                 st.error(f"Image Rejected: {', '.join(quality.reasons)}")
             else:
-                pred = pipeline.soil_model.predict(soil_pil)
-                st.subheader(f"Identified Soil: {pred['soil_type'].replace('_', ' ').title()}")
-                st.metric("Calibrated Confidence", f"{pred['confidence']*100:.1f}%")
-                st.write(f"**Mahalanobis OOD Distance:** `{pred.get('ood_distance', 0.0):.2f}`")
-                st.write(f"**OOD Status:** {'OUT OF DISTRIBUTION (ABSTAIN)' if pred.get('is_ood') else 'IN DISTRIBUTION (RELIABLE)'}")
+                pred, embedding = pipeline.soil_model.predict(soil_pil)
+                st.subheader(f"Identified Soil: {pred.soil_class.replace('_', ' ').title()}")
+                confidence_label = "Calibrated Confidence" if pred.calibrated else "Model Confidence (Uncalibrated)"
+                st.metric(confidence_label, f"{pred.confidence*100:.1f}%")
+                if hasattr(pipeline.soil_model, "ood_detector"):
+                    reliability = pipeline.soil_model.ood_detector.evaluate_reliability(
+                        embedding, pred.confidence
+                    )
+                    st.write(f"**OOD Status:** {reliability.level.value.upper()}")
 
 
 # =========================================================================
@@ -391,8 +409,22 @@ elif page == "📊 Crop Recommendations":
         hum_in = st.slider("Relative Humidity (%)", 10.0, 100.0, 80.0)
         rain_in = st.slider("Rainfall (mm)", 20.0, 500.0, 200.0)
 
-    recs, missing = pipeline.recommender.recommend(
-        soil_type=st_soil, n=n_in, p=p_in, k=k_in, ph=ph_in, temperature=temp_in, humidity=hum_in, rainfall=rain_in
+    soil_prediction = SoilPrediction(
+        soil_class=f"{st_soil.title()} Soil",
+        confidence=1.0,
+        raw_confidence=1.0,
+        calibrated=False,
+    )
+    recs, missing, _ = pipeline.recommender.recommend(
+        soil_pred=soil_prediction,
+        disease_pred=None,
+        ph=ph_in,
+        nitrogen=n_in,
+        phosphorus=p_in,
+        potassium=k_in,
+        temperature=temp_in,
+        humidity=hum_in,
+        rainfall=rain_in,
     )
 
     st.markdown("### Top Ranked Suitable Crops")
@@ -400,8 +432,8 @@ elif page == "📊 Crop Recommendations":
         {
             "Rank": f"#{r.rank}",
             "Crop": r.crop_name.title(),
-            "Suitability Score": f"{r.suitability_score*100:.1f}%",
-            "Climate Risk": r.climate_risk_level.title(),
+            "Suitability Score": f"{r.suitability_score:.1f}%",
+            "Compatibility": r.compatibility_grade,
         }
         for r in recs
     ])
@@ -422,7 +454,7 @@ elif page == "🧠 Explainability & SHAP":
     st.write(f"**Narrative:** {explanation['narrative']}")
     df_shap = pd.DataFrame(list(explanation["feature_attributions"].items()), columns=["Feature", "Attribution"])
     fig_shap = px.bar(df_shap, x="Attribution", y="Feature", orientation="h", title="SHAP Marginal Contribution to Rice Recommendation", color="Attribution", color_continuous_scale="Tealgrn")
-    st.plotly_chart(fig_shap, use_container_width=True)
+    st.plotly_chart(fig_shap, width="stretch")
 
 
 # =========================================================================
@@ -445,7 +477,7 @@ elif page == "📋 Model Catalog & Metrics":
         }
         for m in models
     ]
-    st.dataframe(pd.DataFrame(model_data), use_container_width=True)
+    st.dataframe(pd.DataFrame(model_data), width="stretch")
 
 
 # =========================================================================
