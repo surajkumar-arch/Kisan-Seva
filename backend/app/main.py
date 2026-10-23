@@ -20,6 +20,24 @@ from backend.app.routes.pipeline import router as pipeline_router
 from backend.app.routes.evaluation import router as evaluation_router
 from backend.app.routes.environment import router as environment_router
 from backend.app.routes.insights import router as insights_router
+from backend.app.routes.community import router as community_router
+from backend.app.routes.advisor import router as advisor_router
+from backend.app.routes.voice import router as voice_router
+from backend.app.routes.spectral import router as spectral_router
+from backend.app.routes.video_scanner import router as video_scanner_router
+from backend.app.routes.council import router as council_router
+from backend.app.routes.edge import router as edge_router
+from backend.app.routes.satellite import router as satellite_router
+from backend.app.routes.tank_mix import router as tank_mix_router
+from backend.app.routes.yield_forecast import router as yield_forecast_router
+from backend.app.routes.mandi import router as mandi_router
+from backend.app.routes.vernacular_voice import router as vernacular_voice_router
+from backend.app.routes.insurance import router as insurance_router
+from backend.app.routes.microclimate import router as microclimate_router
+from backend.app.routes.carbon_ledger import router as carbon_ledger_router
+from backend.app.routes.precision_irrigation import router as precision_irrigation_router
+from backend.app.routes.epidemic_swarm import router as epidemic_swarm_router
+from backend.app.services.community_service import init_community_db
 from backend.app.services.validation import init_db
 from backend.app.services.soil_health_service import init_phase2_db
 from backend.app.services.plant_health_service import init_phase3_db
@@ -51,6 +69,7 @@ async def lifespan(app: FastAPI):
     init_phase4_db()
     init_phase5_db()
     init_phase6_db()
+    init_community_db()
     yield
 
 
@@ -99,6 +118,23 @@ app.include_router(pipeline_router)
 app.include_router(evaluation_router)
 app.include_router(environment_router)
 app.include_router(insights_router)
+app.include_router(community_router)
+app.include_router(advisor_router)
+app.include_router(voice_router)
+app.include_router(spectral_router)
+app.include_router(video_scanner_router)
+app.include_router(council_router)
+app.include_router(edge_router)
+app.include_router(satellite_router)
+app.include_router(tank_mix_router)
+app.include_router(yield_forecast_router)
+app.include_router(mandi_router)
+app.include_router(vernacular_voice_router)
+app.include_router(insurance_router)
+app.include_router(microclimate_router)
+app.include_router(carbon_ledger_router)
+app.include_router(precision_irrigation_router)
+app.include_router(epidemic_swarm_router)
 
 
 @app.get("/")
@@ -135,6 +171,10 @@ async def root():
             "pipeline_stats": "/api/pipeline/stats",
             "pipeline_batch": "/api/pipeline/batch-analyze",
             "evaluation_metrics": "/api/evaluation/metrics",
+            "community_outbreaks": "/api/community/outbreaks",
+            "community_report": "/api/community/report",
+            "advisor_economics": "/api/advisor/economics",
+            "voice_status": "/api/ai/voice/status",
             "docs": "/docs",
         },
         "all_phases_completed": True,

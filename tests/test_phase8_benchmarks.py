@@ -35,7 +35,11 @@ def test_evaluation_metrics_endpoint():
     assert "plant_disease_accuracy" in summary
     assert "crop_recommendation_top3_accuracy" in summary
     assert "end_to_end_ml_latency_ms" in summary
-    assert summary["production_readiness"] == "VERIFIED_PRODUCTION_GRADE"
+    assert summary["production_readiness"] == "NOT_ASSESSED"
+    assert summary["evaluation_mode"] == "smoke_test_only"
+    # Without held-out data no accuracy may be reported.
+    assert summary["soil_classification_accuracy"] is None
+    assert summary["plant_disease_accuracy"] is None
 
     # Verify per-model evaluations
     assert "phase2_soil_evaluation" in data
@@ -55,7 +59,7 @@ def test_evaluation_metrics_endpoint():
 
     fusion_eval = data["phase4_fusion_evaluation"]
     assert fusion_eval["latent_dimension"] == 128
-    assert fusion_eval["latent_boundedness"] == "[-1.0, 1.0] (100% verified)"
+    assert fusion_eval["latent_boundedness"].startswith("[-1.0, 1.0] (asserted on all")
 
 
 def test_concurrent_load_stress():

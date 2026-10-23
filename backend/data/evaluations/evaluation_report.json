@@ -1,251 +1,109 @@
 {
   "system": "KisanSeva Smart Agriculture System",
   "evaluation_phase": "PHASE 8: Testing, Evaluation & Deployment",
-  "timestamp": "2026-10-10T14:50:21Z",
-  "total_evaluation_runtime_seconds": 2.32,
+  "timestamp": "2026-10-23T19:45:29Z",
+  "total_evaluation_runtime_seconds": 0.3,
   "executive_summary": {
-    "soil_classification_accuracy": 0.2556,
-    "plant_disease_accuracy": 0.2095,
+    "evaluation_mode": "smoke_test_only",
+    "soil_classification_accuracy": null,
+    "plant_disease_accuracy": null,
     "crop_recommendation_top3_accuracy": 1.0,
-    "end_to_end_ml_latency_ms": 21.23,
-    "production_readiness": "VERIFIED_PRODUCTION_GRADE"
+    "crop_metric_meaning": "catalog self-consistency, not field accuracy",
+    "end_to_end_ml_latency_ms": 29.46,
+    "production_readiness": "NOT_ASSESSED",
+    "readiness_note": "Readiness requires accuracy measured on held-out real images; run with --soil-dir/--plant-dir."
   },
   "phase2_soil_evaluation": {
     "model_architecture": "EfficientNet-B0 (Transfer Learning)",
-    "num_classes": 6,
-    "total_test_samples": 90,
-    "overall_accuracy": 0.2556,
-    "macro_f1_score": 0.2109,
-    "avg_inference_latency_ms": 12.4,
-    "p95_latency_ms": 14.9,
-    "per_class_metrics": {
-      "Alluvial Soil": {
-        "precision": 0.1829,
-        "recall": 1.0,
-        "f1_score": 0.3093,
-        "support": 15
-      },
-      "Black Soil": {
-        "precision": 1.0,
-        "recall": 0.0667,
-        "f1_score": 0.125,
-        "support": 15
-      },
-      "Clay Soil": {
-        "precision": 1.0,
-        "recall": 0.1333,
-        "f1_score": 0.2353,
-        "support": 15
-      },
-      "Red Soil": {
-        "precision": 1.0,
-        "recall": 0.1333,
-        "f1_score": 0.2353,
-        "support": 15
-      },
-      "Sandy Soil": {
-        "precision": 1.0,
-        "recall": 0.1333,
-        "f1_score": 0.2353,
-        "support": 15
-      },
-      "Loamy Soil": {
-        "precision": 1.0,
-        "recall": 0.0667,
-        "f1_score": 0.125,
-        "support": 15
-      }
-    },
-    "confusion_matrix": [
-      [
-        15,
-        0,
-        0,
-        0,
-        0,
-        0
-      ],
-      [
-        14,
-        1,
-        0,
-        0,
-        0,
-        0
-      ],
-      [
-        13,
-        0,
-        2,
-        0,
-        0,
-        0
-      ],
-      [
-        13,
-        0,
-        0,
-        2,
-        0,
-        0
-      ],
-      [
-        13,
-        0,
-        0,
-        0,
-        2,
-        0
-      ],
-      [
-        14,
-        0,
-        0,
-        0,
-        0,
-        1
-      ]
-    ]
+    "num_classes": 4,
+    "class_names": [
+      "Alluvial Soil",
+      "Black Soil",
+      "Clay Soil",
+      "Red Soil"
+    ],
+    "evaluation_type": "smoke_test_no_accuracy",
+    "note": "Accuracy not measured. Pass --soil-dir/--plant-dir with held-out images to measure it.",
+    "forward_pass_ok": true,
+    "trained_weights_loaded": true,
+    "overall_accuracy": null,
+    "macro_f1_score": null,
+    "per_class_metrics": {},
+    "confusion_matrix": null,
+    "total_test_samples": 0,
+    "avg_inference_latency_ms": 17.45,
+    "p95_latency_ms": 22.27
   },
   "phase3_plant_evaluation": {
     "model_architecture": "MobileNetV3-Large (Edge-Optimized)",
-    "num_classes": 7,
-    "total_test_samples": 105,
-    "overall_accuracy": 0.2095,
-    "macro_f1_score": 0.1485,
-    "avg_inference_latency_ms": 8.48,
-    "p95_latency_ms": 9.55,
-    "per_class_metrics": {
-      "Healthy Foliage": {
-        "precision": 1.0,
-        "recall": 0.0667,
-        "f1_score": 0.125,
-        "support": 15
-      },
-      "Early Blight": {
-        "precision": 1.0,
-        "recall": 0.1333,
-        "f1_score": 0.2353,
-        "support": 15
-      },
-      "Late Blight": {
-        "precision": 1.0,
-        "recall": 0.0,
-        "f1_score": 0.0,
-        "support": 15
-      },
-      "Powdery Mildew": {
-        "precision": 0.0645,
-        "recall": 0.1333,
-        "f1_score": 0.087,
-        "support": 15
-      },
-      "Leaf Rust": {
-        "precision": 0.2174,
-        "recall": 1.0,
-        "f1_score": 0.3571,
-        "support": 15
-      },
-      "Bacterial Spot": {
-        "precision": 1.0,
-        "recall": 0.1333,
-        "f1_score": 0.2353,
-        "support": 15
-      },
-      "Yellow Leaf Curl": {
-        "precision": 1.0,
-        "recall": 0.0,
-        "f1_score": 0.0,
-        "support": 15
-      }
-    },
-    "confusion_matrix": [
-      [
-        1,
-        0,
-        0,
-        14,
-        0,
-        0,
-        0
-      ],
-      [
-        0,
-        2,
-        0,
-        0,
-        13,
-        0,
-        0
-      ],
-      [
-        0,
-        0,
-        0,
-        0,
-        15,
-        0,
-        0
-      ],
-      [
-        0,
-        0,
-        0,
-        2,
-        13,
-        0,
-        0
-      ],
-      [
-        0,
-        0,
-        0,
-        0,
-        15,
-        0,
-        0
-      ],
-      [
-        0,
-        0,
-        0,
-        0,
-        13,
-        2,
-        0
-      ],
-      [
-        0,
-        0,
-        0,
-        15,
-        0,
-        0,
-        0
-      ]
-    ]
+    "num_classes": 30,
+    "class_names": [
+      "banana_bract_mosaic_virus",
+      "banana_cordana",
+      "banana_healthy",
+      "banana_insectpest",
+      "banana_moko",
+      "banana_panama",
+      "banana_pestalotiopsis",
+      "banana_sigatoka",
+      "banana_yb_sigatoka",
+      "cauliflower_Blackrot",
+      "cauliflower_bacterial _spot _rot",
+      "cauliflower_downy_mildew",
+      "cauliflower_healthy",
+      "chilli_anthracnose",
+      "chilli_healthy",
+      "chilli_leafcurl",
+      "chilli_leafspot",
+      "chilli_whitefly",
+      "chilli_yellowish",
+      "groundnut_early_leaf_spot",
+      "groundnut_early_rust",
+      "groundnut_healthy",
+      "groundnut_late_leaf_spot",
+      "groundnut_nutrition_deficiency",
+      "groundnut_rust",
+      "radish_black_leaf_spot",
+      "radish_downey_mildew",
+      "radish_flea_beetle",
+      "radish_healthy",
+      "radish_mosaic"
+    ],
+    "evaluation_type": "smoke_test_no_accuracy",
+    "note": "Accuracy not measured. Pass --soil-dir/--plant-dir with held-out images to measure it.",
+    "forward_pass_ok": true,
+    "trained_weights_loaded": true,
+    "overall_accuracy": null,
+    "macro_f1_score": null,
+    "per_class_metrics": {},
+    "confusion_matrix": null,
+    "total_test_samples": 0,
+    "avg_inference_latency_ms": 11.39,
+    "p95_latency_ms": 11.78
   },
   "phase4_fusion_evaluation": {
     "model_architecture": "Gated Multi-Modal Fusion Net",
+    "evaluation_type": "invariant_check_on_random_inputs",
     "latent_dimension": 128,
     "total_eval_trials": 50,
-    "avg_inference_latency_ms": 0.278,
-    "mean_latent_l2_norm": 7.086,
-    "mean_gating_entropy": 1.0932,
+    "avg_inference_latency_ms": 0.53,
+    "mean_latent_l2_norm": 7.061,
+    "mean_gating_entropy": 1.0917,
     "fvi_range": [
       49,
-      53
+      52
     ],
-    "latent_boundedness": "[-1.0, 1.0] (100% verified)",
-    "modality_weights_sum": "1.000 (Softmax normalized)"
+    "latent_boundedness": "[-1.0, 1.0] (asserted on all 50 trials)",
+    "modality_weights_sum": "softmax normalised"
   },
   "phase5_crop_evaluation": {
-    "model_architecture": "CropRecommendationNet (Latent Neural Classifier)",
+    "model_architecture": "Rule-based agronomic suitability engine (catalog envelopes)",
+    "evaluation_type": "catalog_self_consistency",
+    "note": "Feeds each crop its own optimal conditions. Measures rule consistency, not field accuracy.",
     "num_commercial_crops": 12,
-    "total_eval_trials": 50,
-    "top_1_accuracy": 0.94,
+    "top_1_accuracy": 0.75,
     "top_3_accuracy": 1.0,
-    "agronomic_constraint_satisfaction_rate": "98.5%",
-    "avg_inference_latency_ms": 0.073
+    "mean_rank": 1.25,
+    "avg_inference_latency_ms": 0.091
   }
 }

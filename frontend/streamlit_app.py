@@ -10,6 +10,14 @@ Features:
 import io
 import json
 import os
+import sys
+from pathlib import Path
+
+# Ensure project root is in sys.path so 'frontend' and 'backend' modules are found
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 import requests
 import numpy as np
 import pandas as pd
@@ -26,6 +34,29 @@ from frontend.utils.charts import (
 )
 from frontend.utils.presets import FARM_PRESETS, generate_synthetic_field_image
 from frontend.utils.styles import inject_global_css
+from frontend.utils.voice import read_aloud_button
+from frontend.utils.community_ui import (
+    render_advisor_view,
+    render_radar_view,
+    render_share_to_radar,
+    render_voice_question,
+)
+from frontend.utils.extraordinary_ui import (
+    render_spectral_ndvi_studio,
+    render_drone_scanner_studio,
+    render_council_chamber_studio,
+    render_edge_offline_studio,
+    render_satellite_drought_studio,
+    render_tank_mix_compatibility_studio,
+    render_yield_forecasting_studio,
+    render_mandi_arbitrage_studio,
+    render_kisan_vaani_studio,
+    render_pmfby_insurance_studio,
+    render_microclimate_studio,
+    render_carbon_ledger_studio,
+    render_precision_irrigation_studio,
+    render_epidemic_swarm_studio,
+)
 
 def render_plant_disease_result_card(p_res: dict):
     """Render comprehensive diagnostic report for leaf foliage disease."""
@@ -97,6 +128,8 @@ def render_plant_disease_result_card(p_res: dict):
         for idx, item in enumerate(preventive, 1):
             st.markdown(f"**{idx}.** {item}")
 
+    render_share_to_radar(BACKEND_URL, p_res, key=str(p_res.get("request_id")))
+
     render_xai_agents_panel(
         key=str(p_res.get("request_id")),
         condition=cond,
@@ -109,7 +142,7 @@ def render_plant_disease_result_card(p_res: dict):
 
 
 # Backend Configuration
-BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
+BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8010")
 
 
 def render_xai_agents_panel(key: str, condition=None, confidence=None, soil_type=None):
@@ -251,6 +284,7 @@ def render_xai_agents_panel(key: str, condition=None, confidence=None, soil_type
         st.caption("Ask questions about this diagnosis, fertilization schedules, or pest protection in Hindi, English, Telugu, etc.")
         chat_lang = st.selectbox("Select Preferred Language:", ["English", "Hindi", "Telugu", "Tamil", "Marathi", "Bengali", "Gujarati"], key=f"chat_lang_{key}")
         user_query = st.text_input("Enter your question:", placeholder="e.g. How much neem oil should I spray per acre? (नीम का तेल कितना छिड़कें?)", key=f"chat_in_{key}")
+        render_voice_question(BACKEND_URL, key, chat_lang, {"condition": condition, "confidence": confidence, "soil": soil_type, **ctx})
         if st.button("Send to AI Agronomist", key=f"chat_btn_{key}") and user_query:
             with st.spinner("Consulting KisanSeva AI Agronomist..."):
                 try:
@@ -266,6 +300,7 @@ def render_xai_agents_panel(key: str, condition=None, confidence=None, soil_type
                     if c_res.status_code == 200:
                         cj = c_res.json()
                         st.markdown(cj.get("reply", ""))
+                        read_aloud_button(cj.get("reply", ""), chat_lang)
                         if not cj.get("has_api_key"):
                             st.info("💡 Note: Operating on KisanSeva Offline Expert Knowledge Base. Add your `GEMINI_API_KEY` in `.env` to unlock live Gemini 1.5 Pro AI.")
                     else:
@@ -298,7 +333,7 @@ with st.sidebar:
         else:
             st.warning("🟡 API Engine: Degraded")
     except Exception:
-        st.error("🔴 API Engine: Offline (Run FastAPI on :8000)")
+        st.error("🔴 API Engine: Offline (run: uvicorn backend.app.main:app --port 8010)")
 
     st.markdown("---")
     st.markdown("### 🧭 Navigation & Studio Views")
@@ -309,6 +344,22 @@ with st.sidebar:
         "🩺 Agronomic Rx & Treatment Pad",
         "📊 Multi-Modal Visual Analytics",
         "📜 Scan History & Export Center",
+        "🛰️ Community Outbreak Radar",
+        "💰 Action Advisor (Cost & Profit)",
+        "🔬 Synthetic Multispectral NDVI Studio",
+        "🚁 Drone Flyover & AR HUD Scanner",
+        "🤖 Autonomous Multi-Agent Debate Council",
+        "⚡ Zero-Internet Edge ONNX INT8 Engine",
+        "🌊 Satellite Moisture & Drought Profiler",
+        "🧪 Smart Spray Tank-Mix & Drift Studio",
+        "📈 Predictive Crop Yield & Biomass Studio",
+        "💰 Smart Mandi Real-Time Arbitrage Studio",
+        "🎙️ किसान वाणी (Kisan Vaani) Voice Studio",
+        "📜 PMFBY Crop Insurance Claim Dossier",
+        "🌦️ Hyper-Local Microclimate & Spray Early Warning",
+        "🌱 Farm Ledger & Carbon Credit Offset Studio",
+        "💧 Precision Smart Irrigation & Solar Pump Digital Twin",
+        "☣️ Bio-Surveillance & Epidemic Swarm Radar",
     ]
     if "nav_view" not in st.session_state:
         st.session_state.nav_view = MODULE_OPTIONS[0]
@@ -1120,3 +1171,103 @@ elif active_view == "📜 Scan History & Export Center":
                 st.info("No matching records found. Run a new diagnosis in the Diagnostic Studio.")
     except Exception as exc:
         st.error(f"Error fetching historical records: {str(exc)}")
+
+# =========================================================================
+# MODULE 6: COMMUNITY OUTBREAK RADAR
+# =========================================================================
+elif active_view == "🛰️ Community Outbreak Radar":
+    render_radar_view(BACKEND_URL)
+
+# =========================================================================
+# MODULE 7: ACTION ADVISOR (COST & PROFIT)
+# =========================================================================
+elif active_view == "💰 Action Advisor (Cost & Profit)":
+    render_advisor_view(BACKEND_URL)
+
+# =========================================================================
+# MODULE 8: SYNTHETIC MULTISPECTRAL NDVI STUDIO
+# =========================================================================
+elif active_view == "🔬 Synthetic Multispectral NDVI Studio":
+    render_spectral_ndvi_studio(BACKEND_URL)
+
+# =========================================================================
+# MODULE 9: DRONE FLYOVER & AR HUD SCANNER
+# =========================================================================
+elif active_view == "🚁 Drone Flyover & AR HUD Scanner":
+    render_drone_scanner_studio(BACKEND_URL)
+
+# =========================================================================
+# MODULE 10: AUTONOMOUS MULTI-AGENT DEBATE COUNCIL
+# =========================================================================
+elif active_view == "🤖 Autonomous Multi-Agent Debate Council":
+    render_council_chamber_studio(BACKEND_URL)
+
+# =========================================================================
+# MODULE 11: ZERO-INTERNET EDGE ONNX INT8 ENGINE
+# =========================================================================
+elif active_view == "⚡ Zero-Internet Edge ONNX INT8 Engine":
+    render_edge_offline_studio(BACKEND_URL)
+
+# =========================================================================
+# MODULE 12: SATELLITE MOISTURE & DROUGHT PROFILER
+# =========================================================================
+elif active_view == "🌊 Satellite Moisture & Drought Profiler":
+    render_satellite_drought_studio(BACKEND_URL)
+
+# =========================================================================
+# MODULE 13: SMART SPRAY TANK-MIX & DRIFT STUDIO
+# =========================================================================
+elif active_view == "🧪 Smart Spray Tank-Mix & Drift Studio":
+    render_tank_mix_compatibility_studio(BACKEND_URL)
+
+# =========================================================================
+# MODULE 14: PREDICTIVE CROP YIELD & BIOMASS STUDIO
+# =========================================================================
+elif active_view == "📈 Predictive Crop Yield & Biomass Studio":
+    render_yield_forecasting_studio(BACKEND_URL)
+
+# =========================================================================
+# MODULE 15: SMART MANDI REAL-TIME ARBITRAGE STUDIO
+# =========================================================================
+elif active_view == "💰 Smart Mandi Real-Time Arbitrage Studio":
+    render_mandi_arbitrage_studio(BACKEND_URL)
+
+# =========================================================================
+# MODULE 16: KISAN VAANI VERNACULAR VOICE STUDIO
+# =========================================================================
+elif active_view == "🎙️ किसान वाणी (Kisan Vaani) Voice Studio":
+    render_kisan_vaani_studio(BACKEND_URL)
+
+# =========================================================================
+# MODULE 17: PMFBY CROP INSURANCE CLAIM DOSSIER
+# =========================================================================
+elif active_view == "📜 PMFBY Crop Insurance Claim Dossier":
+    render_pmfby_insurance_studio(BACKEND_URL)
+
+# =========================================================================
+# MODULE 18: HYPER-LOCAL MICROCLIMATE & SPRAY EARLY WARNING
+# =========================================================================
+elif active_view == "🌦️ Hyper-Local Microclimate & Spray Early Warning":
+    render_microclimate_studio(BACKEND_URL)
+
+# =========================================================================
+# MODULE 19: FARM LEDGER & CARBON CREDIT OFFSET STUDIO
+# =========================================================================
+elif active_view == "🌱 Farm Ledger & Carbon Credit Offset Studio":
+    render_carbon_ledger_studio(BACKEND_URL)
+
+# =========================================================================
+# MODULE 20: PRECISION SMART IRRIGATION & SOLAR PUMP DIGITAL TWIN
+# =========================================================================
+elif active_view == "💧 Precision Smart Irrigation & Solar Pump Digital Twin":
+    render_precision_irrigation_studio(BACKEND_URL)
+
+# =========================================================================
+# MODULE 21: BIO-SURVEILLANCE & EPIDEMIC SWARM RADAR
+# =========================================================================
+elif active_view == "☣️ Bio-Surveillance & Epidemic Swarm Radar":
+    render_epidemic_swarm_studio(BACKEND_URL)
+
+
+
+
