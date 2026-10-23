@@ -226,9 +226,13 @@ class RealtimeWeatherCropService:
             enhanced_crops.append({
                 **crop_item,
                 "crop_name": crop_name,
+                "suitability_score": adjusted_score,
                 "realtime_adjusted_score": adjusted_score,
                 "climate_fit_rating": climate_fit,
-                "live_weather_rationale": " ".join(weather_notes)
+                "weather_rationale": " ".join(weather_notes),
+                "live_weather_rationale": " ".join(weather_notes),
+                "thermal_factor": round(weather_factor, 2),
+                "moisture_factor": round(weather_factor, 2),
             })
 
         # Re-sort by realtime_adjusted_score
@@ -236,10 +240,25 @@ class RealtimeWeatherCropService:
         top_crop_name = enhanced_crops[0]["crop_name"] if enhanced_crops else "Wheat"
         top_crop_score = enhanced_crops[0]["realtime_adjusted_score"] if enhanced_crops else 85.0
 
+        telemetry_alias = {
+            "station_name": weather.get("location_name", "Station"),
+            "state": weather.get("location_name", "District"),
+            "source": weather.get("source", "Open-Meteo NWP Radar"),
+            "temperature_c": weather.get("temperature_c"),
+            "relative_humidity_pct": weather.get("humidity_pct"),
+            "rainfall_forecast_7d_mm": weather.get("cumulative_rainfall_7d_mm"),
+            "weather_description": weather.get("condition_badge"),
+            "wind_speed_kmh": weather.get("wind_speed_kmh"),
+            "telemetry_latency_ms": 115,
+            "latitude": weather.get("latitude"),
+            "longitude": weather.get("longitude"),
+        }
+
         return {
             "status": "SUCCESS",
             "timestamp": datetime.now().isoformat(),
             "live_weather_telemetry": weather,
+            "weather_telemetry": telemetry_alias,
             "soil_context": {
                 "soil_type": soil_type,
                 "ph": ph,
@@ -248,9 +267,12 @@ class RealtimeWeatherCropService:
                 "potassium_kgha": potassium,
             },
             "primary_recommended_crop": top_crop_name,
+            "primary_crop": top_crop_name,
             "primary_crop_score": top_crop_score,
+            "primary_suitability": top_crop_score,
             "climate_resilience_badge": f"🌤️ {top_crop_name} perfectly matched for {weather['location_name']} at {live_temp}°C",
-            "realtime_crop_rankings": enhanced_crops
+            "realtime_crop_rankings": enhanced_crops,
+            "recommendations": enhanced_crops,
         }
 
 
