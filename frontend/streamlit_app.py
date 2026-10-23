@@ -1029,24 +1029,36 @@ elif active_view == "🌾 Precision Crop Recommendation Advisor":
 
         if "last_live_telemetry" in st.session_state and st.session_state.last_live_telemetry:
             t_data = st.session_state.last_live_telemetry
+            s_name = t_data.get("station_name") or t_data.get("location_name", "Local Station")
+            s_state = t_data.get("state") or t_data.get("location_name", "India")
+            s_lat = t_data.get("latitude", 29.68)
+            s_lon = t_data.get("longitude", 76.99)
+            s_source = t_data.get("source", "Open-Meteo NWP Radar")
+            s_cond = t_data.get("weather_description") or t_data.get("condition_badge", "Seasonal")
+            s_temp = t_data.get("temperature_c", 25.0)
+            s_hum = t_data.get("relative_humidity_pct") or t_data.get("humidity_pct", 60.0)
+            s_rain = t_data.get("rainfall_forecast_7d_mm") or t_data.get("cumulative_rainfall_7d_mm", 0.0)
+            s_wind = t_data.get("wind_speed_kmh", 10.0)
+            s_lat_ms = t_data.get("telemetry_latency_ms", 120)
+
             st.markdown(
                 f"""
                 <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); color: white; border-radius: 12px; padding: 18px 24px; margin-bottom: 20px; border-left: 5px solid #38bdf8;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <div>
                             <span style="background: rgba(56, 189, 248, 0.2); color: #38bdf8; padding: 4px 10px; border-radius: 9999px; font-weight: 700; font-size: 0.8rem;">LIVE NWP TELEMETRY</span>
-                            <h3 style="margin: 6px 0 2px 0; color: #f8fafc;">📍 {t_data['station_name']}, {t_data['state']} ({t_data['latitude']}°N, {t_data['longitude']}°E)</h3>
-                            <span style="font-size: 0.85rem; color: #94a3b8;">Data Source: <b>{t_data['source']}</b> | Condition: <b>{t_data['weather_description']}</b></span>
+                            <h3 style="margin: 6px 0 2px 0; color: #f8fafc;">📍 {s_name} ({s_lat}°N, {s_lon}°E)</h3>
+                            <span style="font-size: 0.85rem; color: #94a3b8;">Data Source: <b>{s_source}</b> | Condition: <b>{s_cond}</b></span>
                         </div>
                         <div style="text-align: right;">
-                            <span style="font-size: 2.2rem; font-weight: 900; color: #38bdf8;">{t_data['temperature_c']}°C</span><br/>
-                            <span style="font-size: 0.85rem; color: #cbd5e1;">Humidity: <b>{t_data['relative_humidity_pct']}%</b></span>
+                            <span style="font-size: 2.2rem; font-weight: 900; color: #38bdf8;">{s_temp}°C</span><br/>
+                            <span style="font-size: 0.85rem; color: #cbd5e1;">Humidity: <b>{s_hum}%</b></span>
                         </div>
                     </div>
                     <div style="display: flex; gap: 20px; margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px; font-size: 0.85rem; color: #94a3b8;">
-                        <div>🌧️ <b>7-Day Cumulative Rain:</b> {t_data['rainfall_forecast_7d_mm']} mm</div>
-                        <div>💨 <b>Wind Velocity:</b> {t_data['wind_speed_kmh']} km/h</div>
-                        <div>⏱️ <b>Telemetry Latency:</b> {t_data['telemetry_latency_ms']} ms</div>
+                        <div>🌧️ <b>7-Day Cumulative Rain:</b> {s_rain} mm</div>
+                        <div>💨 <b>Wind Velocity:</b> {s_wind} km/h</div>
+                        <div>⏱️ <b>Telemetry Latency:</b> {s_lat_ms} ms</div>
                     </div>
                 </div>
                 """,
