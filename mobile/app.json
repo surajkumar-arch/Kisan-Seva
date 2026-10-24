@@ -5,10 +5,6 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "splash": {
-      "resizeMode": "contain",
-      "backgroundColor": "#022c22"
-    },
     "ios": {
       "supportsTablet": true
     },
@@ -16,6 +12,10 @@
       "adaptiveIcon": {
         "backgroundColor": "#022c22"
       }
-    }
+    },
+    "plugins": [
+      "expo-asset",
+      "expo-sharing"
+    ]
   }
 }
