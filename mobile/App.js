@@ -9,16 +9,17 @@ import {
   Image,
   ActivityIndicator,
   Alert,
-  SafeAreaView,
   StatusBar,
   Platform,
   KeyboardAvoidingView,
   Share,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import Constants from 'expo-constants';
 
 const CROP_PRESETS = [
   { label: '🌾 Rice / Alluvial', ph: '6.6', n: '160', p: '45', k: '160', t: '28', h: '75', r: '180', soil: 'Alluvial Soil' },
@@ -151,10 +152,17 @@ const HOST_PRESETS = [
   { label: '📡 Wi-Fi LAN', url: 'http://172.20.10.6:8010' },
 ];
 
+const getInitialBackendUrl = () => {
+  const hostUri = Constants.expoConfig?.hostUri || Constants.manifest?.debuggerHost || '';
+  const ip = hostUri ? hostUri.split(':')[0] : null;
+  if (ip && ip !== 'localhost' && ip !== '127.0.0.1') {
+    return `http://${ip}:8010`;
+  }
+  return 'http://172.20.10.6:8010';
+};
+
 export default function App() {
-  const [backendUrl, setBackendUrl] = useState(
-    Platform.OS === 'android' ? 'http://10.0.2.2:8010' : 'http://127.0.0.1:8010'
-  );
+  const [backendUrl, setBackendUrl] = useState(getInitialBackendUrl);
   const [activeTab, setActiveTab] = useState('home');
   const [serverOnline, setServerOnline] = useState(null);
 
@@ -918,7 +926,7 @@ export default function App() {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: false,
         quality: 0.85,
       });
@@ -931,6 +939,31 @@ export default function App() {
       }
     } catch (err) {
       Alert.alert('Picker Error', err.message);
+    }
+  };
+
+  const capturePhoto = async (target) => {
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Permission Denied', 'Camera permission is required to take photos in field.');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 0.85,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        if (target === 'plant_leaf') setPlantLeafImage(asset);
+        else if (target === 'audit_soil') setAuditSoilImage(asset);
+        else if (target === 'audit_plant') setAuditPlantImage(asset);
+      }
+    } catch (err) {
+      Alert.alert('Camera Error', err.message);
     }
   };
 
@@ -1123,33 +1156,7 @@ export default function App() {
     }
   };
 
-  // -------------------------------------------------------------
-  // Camera capture (gallery picker above is unchanged)
-  // -------------------------------------------------------------
-  const capturePhoto = async (target) => {
-    try {
-      const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert('Permission Denied', 'Camera access is needed to take a photo.');
-        return;
-      }
 
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: false,
-        quality: 0.85,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        if (target === 'plant_leaf') setPlantLeafImage(asset);
-        else if (target === 'audit_soil') setAuditSoilImage(asset);
-        else if (target === 'audit_plant') setAuditPlantImage(asset);
-      }
-    } catch (err) {
-      Alert.alert('Camera Error', err.message);
-    }
-  };
 
   // -------------------------------------------------------------
   // Scan history: load once, save on every change
